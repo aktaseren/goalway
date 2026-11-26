@@ -168,7 +168,7 @@ Key environment variables (see `gateway/config.py` for the full list):
 ## Tests
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt pytest
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/python -m pytest tests/ -q
 ```
 
