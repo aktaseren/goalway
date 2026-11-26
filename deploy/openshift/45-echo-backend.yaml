@@ -1,0 +1,102 @@
+# Echo model backend.
+#
+# A tiny dependency-free "model" so the deployed gateway is fully
+# demoable without GPUs: model=echo works end to end (routing, auth,
+# caching, conversation memory, tool calling).
+#
+# Built from the same repo via the echo-service/ directory
+# (deploy/deploy.sh runs: oc start-build echo-service --from-dir=.)
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: echo-service
+  labels:
+    app: echo-service
+spec:
+  runPolicy: Serial
+  source:
+    type: Binary
+    binary: {}
+    # Build context = echo-service/ so its Dockerfile's COPY
+    # app.py / requirements.txt pick up the right files, not the
+    # repo-root ones.
+    contextDir: echo-service
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile   # relative to contextDir
+  output:
+    to:
+      kind: ImageStreamTag
+      name: echo-service:latest
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: echo-service
+  labels:
+    app: echo-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-service
+  labels:
+    app: echo-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo-service
+  template:
+    metadata:
+      labels:
+        app: echo-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: echo
+          image: image-registry.openshift-image-registry.svc:5000/goalway/echo-service:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-service
+  labels:
+    app: echo-service
+spec:
+  selector:
+    app: echo-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

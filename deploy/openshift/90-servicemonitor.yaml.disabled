@@ -1,0 +1,23 @@
+# ServiceMonitor scraping the gateway's Prometheus /metrics endpoint.
+#
+# NOTE: this only works with a user-managed Prometheus Operator, e.g.
+# Red Hat's "user workload monitoring" enabled for the namespace, or a
+# self-installed kube-prometheus-stack. The built-in cluster monitoring
+# does not pick up arbitrary ServiceMonitors.
+#
+# If your Prometheus selects by release label, adjust the labels below
+# (e.g. `release: prometheus`).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: goalway
+  labels:
+    app: goalway
+spec:
+  selector:
+    matchLabels:
+      app: goalway
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

@@ -1,0 +1,68 @@
+{{- if .Values.echoBackend.enabled }}
+# Echo model backend: a tiny dependency-free "model" so the gateway
+# is demoable without GPUs (model=echo). Service name is fixed as
+# "echo-service" to match the models.json URLs in configFiles.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-service
+  labels:
+    {{- include "goalway.labels" . | nindent 4 }}
+    component: echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "goalway.selectorLabels" . | nindent 6 }}
+      component: echo
+  template:
+    metadata:
+      labels:
+        {{- include "goalway.selectorLabels" . | nindent 8 }}
+        component: echo
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: echo
+          image: {{ .Values.echoBackend.image }}
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.echoBackend.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-service
+  labels:
+    {{- include "goalway.labels" . | nindent 4 }}
+    component: echo
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  selector:
+    {{- include "goalway.selectorLabels" . | nindent 4 }}
+    component: echo
+{{- end }}

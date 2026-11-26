@@ -1,0 +1,38 @@
+{
+  "retrieval": {
+    "default_strategy": "hybrid",
+    "strategies": {
+      "lexical": {
+        "enabled": true,
+        "description": "BM25 keyword search - best for exact term matching"
+      },
+      "vector": {
+        "enabled": true,
+        "description": "Semantic search via embeddings - best for conceptual queries"
+      },
+      "hybrid": {
+        "enabled": true,
+        "description": "Combines lexical and vector via RRF - recommended for best results",
+        "candidate_multiplier": 4,
+        "rank_constant": 60
+      }
+    },
+    "auto_strategy_selection": {
+      "enabled": false,
+      "rules": {
+        "exact_match_keywords": ["id", "code", "number", "uuid", "key"],
+        "semantic_indicators": ["what", "how", "why", "explain", "describe", "similar"]
+      }
+    }
+  },
+  "filtering": {
+    "metadata": {
+      "enabled": true,
+      "max_filter_keys": 10
+    }
+  },
+  "statistics": {
+    "include_by_default": false,
+    "track_latency": true
+  }
+}

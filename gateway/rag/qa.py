@@ -1,0 +1,146 @@
+"""
+Extractive question answering over the RAG knowledge base .
+
+Powers the built-in "rag" chat model: a question is answered by
+retrieving the most relevant ingested documents and extracting the
+sentences that best match the query -- deterministic, dependency-free
+and honest about its sources (every answer carries citations).
+
+When real LLM backends (granite, vLLM, ...) are deployed, prompts are
+augmented with the same retrieval and the model generates the answer;
+this extractive path guarantees the demo works with zero model
+infrastructure.
+"""
+
+from gateway.rag.citations import build_citations, _tokenize
+
+# Content words that carry no topical signal for coverage gating.
+_GATE_STOP_WORDS = {
+    "the", "and", "for", "are", "but", "not", "you", "all", "any",
+    "can", "had", "her", "was", "one", "our", "out", "get", "has",
+    "him", "his", "how", "man", "new", "now", "old", "see", "two",
+    "way", "who", "did", "its", "let", "put", "say", "she", "too",
+    "use", "that", "with", "have", "this", "will", "your", "from",
+    "they", "know", "want", "been", "good", "much", "some", "time",
+    "very", "when", "come", "here", "just", "like", "long", "make",
+    "many", "over", "such", "take", "than", "them", "well", "what",
+    "were", "would", "could", "should", "into", "also", "about",
+    "tell", "me", "him", "her", "there", "then", "them", "is",
+    "are", "was", "were", "am", "do", "does", "did", "doing",
+}
+
+
+def content_coverage(query: str, text: str) -> float:
+    """
+    Fraction of the query's content terms (stop words stripped)
+    present in the text. Separates topical matches (0.5-1.0) from
+    stop-word-only coincidences (~0.0) far better than raw lexical
+    scores, which common words inflate.
+
+    Used as the relevance gate for extractive answers: below the
+    threshold the model says "not in my knowledge base" instead of
+    quoting marginally-related text.
+    """
+    query_terms = [
+        token
+        for token in _tokenize(query)
+        if len(token) > 2 and token not in _GATE_STOP_WORDS
+    ]
+
+    if not query_terms:
+        return 0.0
+
+    text_terms = set(_tokenize(text))
+
+    matched = sum(1 for term in query_terms if term in text_terms)
+
+    return matched / len(query_terms)
+
+
+def _recency_order(results: list) -> list:
+    """
+    News-aware ordering: among results whose relevance scores are
+    close (within 2x of the best), put the most recent first based
+    on the chunk's year metadata. Clearly-more-relevant results keep
+    their lead.
+    """
+    if not results:
+        return results
+
+    scored = [
+        (
+            result.rerank_score
+            if result.rerank_score is not None
+            else result.score,
+            result,
+        )
+        for result in results
+    ]
+
+    best = max(score for score, _ in scored)
+
+    close: list = []
+    rest: list = []
+
+    for score, result in scored:
+        if score >= best * 0.5:
+            close.append(result)
+        else:
+            rest.append(result)
+
+    close.sort(
+        key=lambda result: result.chunk.metadata.get("year") or 0,
+        reverse=True,
+    )
+
+    return close + rest
+
+
+def build_extractive_answer(
+    query: str,
+    results: list,
+    max_sentences: int = 3,
+) -> tuple[str, list[dict]]:
+    """
+    Build an answer from retrieved results.
+
+    Returns (answer_text, citations). The answer quotes the single
+    most query-relevant sentence of each of the top results, marked
+    with its citation id, followed by a Sources block.
+    """
+    if not results:
+        return (
+            "I don't have anything about that in the knowledge base. "
+            "Ingest documents first (RAG tab → Load sample football news).",
+            [],
+        )
+
+    # Order first, then build citations from the ordered results so
+    # citation ids stay aligned with the quoted documents.
+    ordered = _recency_order(results)[:max_sentences]
+
+    citations = build_citations(ordered, query)
+
+    parts = []
+
+    for citation, result in zip(citations, ordered):
+        spans = citation.get("spans") or []
+
+        if spans:
+            best_span = max(spans, key=lambda span: span["score"])
+            sentence = best_span["text"]
+        else:
+            # No query-relevant sentence: fall back to the first
+            # sentence of the chunk.
+            sentence = result.chunk.text.split(". ")[0].rstrip(".") + "."
+
+        parts.append(f"{sentence} {citation['citation_id']}")
+
+    answer = " ".join(parts)
+
+    answer += "\n\nSources: " + ", ".join(
+        f"{c['citation_id']} {c['document_id']}"
+        for c in citations
+    )
+
+    return answer, citations

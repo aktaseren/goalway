@@ -1,0 +1,96 @@
+# Optional single-pod Keycloak for OIDC testing (NOT production).
+#
+# After it is running (see deploy/keycloak/README.md):
+#   1. log in at the keycloak route as admin/admin
+#   2. create realm `gateway`
+#   3. create client `goalway` (confidential or public, audience
+#      mapper for `goalway`), plus a test user
+#   4. point the gateway at it:
+#        OIDC_ISSUER=https://<keycloak-route>/realms/gateway
+#        OIDC_AUDIENCE=goalway
+#        AUTH_PROVIDERS=oidc,api_key   (in goalway-config)
+#
+# State is ephemeral (emptyDir) -- everything is lost on pod restart.
+# The route uses edge TLS because OIDC issuer URLs are https.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.0
+          args:
+            - start-dev
+            - --health-enabled=true
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: admin          # change me
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              value: admin          # change me
+            - name: KC_HTTP_ENABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  to:
+    kind: Service
+    name: keycloak
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

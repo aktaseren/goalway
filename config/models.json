@@ -1,0 +1,36 @@
+{
+    "models": {
+        "rag": {
+            "provider": "rag",
+            "enabled": true,
+            "description": "Built-in extractive QA over the ingested knowledge base (no backend service)"
+        },
+        "echo": {
+            "provider": "openai_compatible",
+            "url": "http://echo-service:8080/v1/chat/completions",
+            "health_url": "http://echo-service:8080/health",
+            "backends": [
+                "http://echo-service:8080/v1/chat/completions"
+            ],
+            "enabled": true
+        },
+        "tinyllama": {
+            "provider": "openai_compatible",
+            "url": "http://tinyllama-service:8080/v1/chat/completions",
+            "health_url": "http://tinyllama-service:8080/health",
+            "backends": [
+                "http://tinyllama-service:8080/v1/chat/completions"
+            ],
+            "enabled": true
+        },
+        "granite": {
+            "provider": "openai_compatible",
+            "url": "http://granite-service:8080/v1/chat/completions",
+            "health_url": "http://granite-service:8080/health",
+            "backends": [
+                "http://granite-service:8080/v1/chat/completions"
+            ],
+            "enabled": true
+        }
+    }
+}

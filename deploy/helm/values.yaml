@@ -1,0 +1,170 @@
+# Default values for the goalway chart.
+
+replicaCount: 1
+
+image:
+  # Internal registry + ImageStream built by deploy/deploy.sh or the
+  # Tekton pipeline. Change these to deploy a pre-built image instead.
+  repository: image-registry.openshift-image-registry.svc:5000/goalway/goalway
+  tag: v1.0.0
+  # Always: the tag is mutable when rebuilt via deploy/deploy.sh
+  pullPolicy: Always
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+route:
+  enabled: true
+  host: ""              # empty -> auto-generated host
+  timeout: 5m           # haproxy router timeout (slow LLM backends)
+
+# Gateway environment config (gateway/config.py). Rendered into a
+# ConfigMap consumed via envFrom. REDIS_URL is set automatically when
+# redis.enabled below.
+config:
+  AUTH_PROVIDERS: "api_key"
+  CACHE_ENABLED: "true"
+  CACHE_TTL_SECONDS: "300"
+  RATE_LIMIT: "60"
+  RATE_LIMIT_WINDOW_SECONDS: "60"
+  QUOTA_ENABLED: "true"
+  DEFAULT_QUOTA_REQUESTS: "1000"
+  QUOTA_WINDOW_SECONDS: "86400"
+  MODEL_REGISTRY_FILE: "config/models.json"
+  API_KEYS_FILE: "config/api_keys.json"
+  RAG_RERANKER: "lexical"
+  RAG_VECTOR_DB_PATH: "/app/data/vectors.db"
+  FEEDBACK_DB_PATH: "/app/data/feedback.db"
+  TOOLS_ENABLED: "true"
+  MCP_ENABLED: "true"
+  AGENT_MAX_ITERATIONS: "8"
+
+# JSON config files mounted at /app/config (override what is baked
+# into the image; hot-reloadable via POST /admin/reload).
+configFiles:
+  models.json: |
+    {
+        "models": {
+            "rag": {
+                "provider": "rag",
+                "enabled": true,
+                "description": "Built-in extractive QA over the ingested knowledge base"
+            },
+            "echo": {
+                "provider": "openai_compatible",
+                "url": "http://echo-service:8080/v1/chat/completions",
+                "health_url": "http://echo-service:8080/health",
+                "backends": [
+                    "http://echo-service:8080/v1/chat/completions"
+                ],
+                "enabled": true
+            }
+        }
+    }
+  rag_config.json: |
+    {
+      "retrieval": {
+        "default_strategy": "hybrid",
+        "strategies": {
+          "lexical": { "enabled": true },
+          "vector": { "enabled": true },
+          "hybrid": { "enabled": true, "candidate_multiplier": 4, "rank_constant": 60 }
+        },
+        "auto_strategy_selection": { "enabled": false }
+      },
+      "filtering": { "metadata": { "enabled": true, "max_filter_keys": 10 } },
+      "statistics": { "include_by_default": false, "track_latency": true }
+    }
+  api_keys.json: |
+    {
+      "redhat-demo-key": {
+        "name": "admin",
+        "role": "admin",
+        "quota": null
+      },
+      "team-user-key": {
+        "name": "platform-team",
+        "role": "user",
+        "quota": 100
+      },
+      "readonly-key": {
+        "name": "demo-readonly",
+        "role": "user",
+        "quota": 20
+      }
+    }
+
+# Credentials (OIDC_*, GITHUB_TOKEN, ARGOCD_TOKEN, ...).
+# Either set createSecret + values, or point existingSecret at a
+# Secret you manage yourself. If neither, the gateway runs with
+# API-key auth only.
+secret:
+  create: false
+  existingSecret: ""
+  values: {}
+  # values:
+  #   OIDC_ISSUER: "https://keycloak.example.com/realms/gateway"
+  #   OIDC_AUDIENCE: "goalway"
+  #   GITHUB_TOKEN: "ghp-..."
+  #   ARGOCD_TOKEN: "..."
+
+persistence:
+  enabled: true
+  size: 10Gi
+  accessModes:
+    - ReadWriteOnce
+
+redis:
+  enabled: true          # false -> in-memory response cache
+  image: redis:6
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# Echo model backend (no-GPU demo model, referenced by the default
+# models.json as "echo"). Disable when real backends are wired in.
+echoBackend:
+  enabled: true
+  image: image-registry.openshift-image-registry.svc:5000/goalway/echo-service:latest
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 2Gi
+
+# Prometheus Operator ServiceMonitor for /metrics.
+# Requires a user-managed Prometheus (e.g. user workload monitoring).
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  labels: {}
+  # labels:
+  #   release: prometheus   # match your Prometheus selector
+
+# Keycloak is intentionally NOT part of this chart -- use
+# deploy/keycloak/ if you need a demo OIDC provider.

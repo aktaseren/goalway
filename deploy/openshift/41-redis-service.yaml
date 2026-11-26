@@ -1,0 +1,16 @@
+# Service for the optional Redis cache (see 40-redis-deployment.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: goalway
+    component: redis
+spec:
+  selector:
+    app: goalway
+    component: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379

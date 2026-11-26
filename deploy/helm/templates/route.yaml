@@ -1,0 +1,19 @@
+{{- if .Values.route.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "goalway.fullname" . }}
+  labels:
+    {{- include "goalway.labels" . | nindent 4 }}
+  annotations:
+    haproxy.router.openshift.io/timeout: {{ .Values.route.timeout | quote }}
+spec:
+  {{- with .Values.route.host }}
+  host: {{ . }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "goalway.fullname" . }}
+  port:
+    targetPort: http
+{{- end }}

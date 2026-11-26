@@ -1,0 +1,25 @@
+# BuildConfig for the gateway image (Docker strategy).
+#
+# Source is binary (--from-dir), so the local repo directory is shipped
+# to the builder pod by `oc start-build goalway --from-dir=.`
+# (this is what deploy/deploy.sh runs). The Dockerfile at the repo root
+# is used as-is.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: goalway
+  labels:
+    app: goalway
+spec:
+  runPolicy: Serial
+  source:
+    type: Binary
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: goalway:v1.0.0

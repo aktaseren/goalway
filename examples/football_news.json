@@ -1,0 +1,89 @@
+{
+  "documents": [
+    {
+      "document_id": "ucl-final-2025",
+      "text": "Paris Saint-Germain won the 2025 Champions League final, thrashing Inter Milan 5-0 in Munich — the biggest winning margin in a European Cup final. Goals from Achraf Hakimi, Desire Doue (twice), Kvicha Kvaratskhelia and Senny Mayulu sealed PSG's first Champions League title, making them the first French club to win Europe's top prize since Marseille in 1993.",
+      "metadata": {"competition": "champions-league", "team": "psg", "year": 2025, "category": "match-report", "source": "demo"}
+    },
+    {
+      "document_id": "ballon-or-2025",
+      "text": "Ousmane Dembele won the 2025 Ballon d'Or, capping a treble-winning season with Paris Saint-Germain in which he scored more than 30 goals. The French forward beat Lamine Yamal and Vitinha to the award. Dembele had also been named Player of the Tournament at the Club World Cup.",
+      "metadata": {"competition": "ballon-dor", "player": "dembele", "year": 2025, "category": "news", "source": "demo"}
+    },
+    {
+      "document_id": "ucl-final-2023",
+      "text": "Manchester City completed the treble by winning the 2023 Champions League final, beating Inter Milan 1-0 in Istanbul. Rodri scored the only goal in the 68th minute. It was City's first Champions League title, making them the second English club after Manchester United in 1999 to win the Premier League, FA Cup and Champions League in the same season.",
+      "metadata": {"competition": "champions-league", "team": "manchester-city", "year": 2023, "category": "match-report", "source": "demo"}
+    },
+    {
+      "document_id": "ucl-final-2024",
+      "text": "Real Madrid won the 2024 Champions League final, beating Borussia Dortmund 2-0 at Wembley. Dani Carvajal opened the scoring in the 74th minute and Vinicius Junior sealed the victory nine minutes later. It was Real Madrid's 15th European Cup, extending their record.",
+      "metadata": {"competition": "champions-league", "team": "real-madrid", "year": 2024, "category": "match-report", "source": "demo"}
+    },
+    {
+      "document_id": "messi-inter-miami",
+      "text": "Lionel Messi joined Inter Miami in July 2023 after leaving Paris Saint-Germain. The move to Major League Soccer was announced with a highlight video. Messi won the Ballon d'Or in 2023, his eighth, after captaining Argentina to the 2022 World Cup title in Qatar.",
+      "metadata": {"competition": "mls", "team": "inter-miami", "player": "messi", "year": 2023, "category": "transfer", "source": "demo"}
+    },
+    {
+      "document_id": "world-cup-2022-final",
+      "text": "Argentina won the 2022 World Cup, beating France on penalties after a 3-3 draw in one of the greatest finals ever played. Messi scored twice and Kylian Mbappe scored a hat-trick for France. The match was played at Lusail Stadium in Qatar on 18 December 2022.",
+      "metadata": {"competition": "world-cup", "team": "argentina", "year": 2022, "category": "match-report", "source": "demo"}
+    },
+    {
+      "document_id": "pl-2023-24-title",
+      "text": "Manchester City won the 2023-24 Premier League title, their fourth consecutive championship, finishing two points ahead of Arsenal. Pep Guardiola's side clinched the title on the final day with a 3-1 win over West Ham. No team had ever won four consecutive English top-flight titles before.",
+      "metadata": {"competition": "premier-league", "team": "manchester-city", "year": 2024, "category": "news", "source": "demo"}
+    },
+    {
+      "document_id": "pl-2024-25-title",
+      "text": "Liverpool won the 2024-25 Premier League title, equalling Manchester United's record of 20 English league championships. Under new head coach Arne Slot, Liverpool secured the title with matches to spare. Mohamed Salah was the standout player of the season with more than 25 goal involvements.",
+      "metadata": {"competition": "premier-league", "team": "liverpool", "year": 2025, "category": "news", "source": "demo"}
+    },
+    {
+      "document_id": "ballon-or-2024",
+      "text": "Rodri won the 2024 Ballon d'Or, becoming the first Spanish player to win the award since Luis Suarez in 1960. The Manchester City midfielder beat Vinicius Junior to the prize. Rodri had won Euro 2024 with Spain and the Premier League with City that year.",
+      "metadata": {"competition": "ballon-dor", "player": "rodri", "year": 2024, "category": "news", "source": "demo"}
+    },
+    {
+      "document_id": "euro-2024-final",
+      "text": "Spain won Euro 2024, beating England 2-1 in the final in Berlin. Mikel Oyarzabal scored the winning goal in the 86th minute after Cole Palmer had equalised for England. Spain won all seven of their matches at the tournament, a record for a European Championship.",
+      "metadata": {"competition": "euro", "team": "spain", "year": 2024, "category": "match-report", "source": "demo"}
+    },
+    {
+      "document_id": "mbappe-real-madrid",
+      "text": "Kylian Mbappe joined Real Madrid in summer 2024 on a free transfer after his contract with Paris Saint-Germain expired. The French striker had been PSG's all-time top scorer with 256 goals. Mbappe took the number 9 shirt at Madrid before switching to number 10 following Luka Modric's departure.",
+      "metadata": {"competition": "la-liga", "team": "real-madrid", "player": "mbappe", "year": 2024, "category": "transfer", "source": "demo"}
+    },
+    {
+      "document_id": "kane-bundesliga",
+      "text": "Harry Kane won his first major trophy in 2025 as Bayern Munich claimed the Bundesliga title. Kane had joined Bayern from Tottenham in August 2023 for a reported 100 million euros. He scored more than 30 league goals in each of his first two Bundesliga seasons.",
+      "metadata": {"competition": "bundesliga", "team": "bayern-munich", "player": "kane", "year": 2025, "category": "news", "source": "demo"}
+    },
+    {
+      "document_id": "injury-news-demo",
+      "text": "Manchester City midfielder Rodri suffered an anterior cruciate ligament injury in September 2024 during a match against Arsenal. The injury ruled him out for the remainder of the 2024-25 season. City's form dipped significantly during his absence, illustrating his importance to the team.",
+      "metadata": {"competition": "premier-league", "team": "manchester-city", "player": "rodri", "year": 2024, "category": "injury", "source": "demo"}
+    },
+    {
+      "document_id": "var-explainer",
+      "text": "The Video Assistant Referee, known as VAR, reviews decisions on goals, penalties, red cards and mistaken identity. VAR was introduced in the Premier League in the 2019-20 season. Semi-automated offside technology was later adopted in the Champions League to speed up offside decisions.",
+      "metadata": {"competition": "general", "category": "explainer", "source": "demo"}
+    },
+    {
+      "document_id": "transfer-window-record",
+      "text": "The 2024 summer transfer window set a new global spending record, with Premier League clubs alone spending more than 2 billion pounds. The most expensive transfer of the window was Julian Alvarez's move from Manchester City to Atletico Madrid for a reported 75 million pounds plus add-ons.",
+      "metadata": {"competition": "general", "year": 2024, "category": "transfer", "source": "demo"}
+    },
+    {
+      "document_id": "wsl-growth",
+      "text": "The Women's Super League achieved record attendance figures in the 2023-24 season, with average crowds surpassing 7,000 for the first time. Chelsea won the 2023-24 WSL title on goal difference ahead of Manchester City. The league signed a landmark domestic broadcast deal worth at least 40 million pounds over four years.",
+      "metadata": {"competition": "wsl", "team": "chelsea", "year": 2024, "category": "news", "source": "demo"}
+    },
+    {
+      "document_id": "copa-america-2024",
+      "text": "Argentina won the 2024 Copa America, beating Colombia 1-0 in the final in Miami after extra time. Lautaro Martinez scored the winning goal in the 112th minute. It was Argentina's 16th Copa America title and their third consecutive major tournament win after the 2021 Copa America and the 2022 World Cup.",
+      "metadata": {"competition": "copa-america", "team": "argentina", "year": 2024, "category": "match-report", "source": "demo"}
+    }
+  ]
+}

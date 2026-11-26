@@ -1,0 +1,83 @@
+# Gateway Deployment.
+#
+# - Image comes from the ImageStream goalway:v1.0.0 (built by the
+#   BuildConfig in 11-buildconfig.yaml).
+# - envFrom pulls env config from goalway-config and (optional)
+#   credentials from goalway-secret.
+# - /app/config is the mounted JSON config (ConfigMap goalway-files,
+#   overrides the copies baked into the image, hot-reloadable via
+#   POST /admin/reload).
+# - /app/data is the PVC holding vectors.db + feedback.db.
+# - runAsNonRoot with no fixed uid: OpenShift assigns an arbitrary
+#   uid per namespace, the standard OpenShift convention.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goalway
+  labels:
+    app: goalway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goalway
+  template:
+    metadata:
+      labels:
+        app: goalway
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          image: image-registry.openshift-image-registry.svc:5000/goalway/goalway:v1.0.0
+          # mutable tag + repeated binary builds: always pull the
+          # freshly built image
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: goalway-config
+            - secretRef:
+                name: goalway-secret
+                optional: true   # gateway runs fine with just API keys
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: config
+          configMap:
+            name: goalway-files
+        - name: data
+          persistentVolumeClaim:
+            claimName: goalway-data

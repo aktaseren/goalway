@@ -1,0 +1,152 @@
+# Gateway configuration.
+#
+# Two ConfigMaps in one file:
+#
+#   goalway-config -> plain env vars, consumed by the Deployment via
+#                        envFrom (see gateway/config.py for the full list)
+#   goalway-files  -> the JSON config files, mounted at /app/config
+#                        (models.json, rag_config.json, api_keys.json)
+#
+# Split so that envFrom never sees keys like "models.json" (invalid env
+# var names) while the volume mount only exposes the JSON files.
+#
+# The namespace is NOT created here -- run `oc new-project goalway`
+# first (deploy/deploy.sh does this for you).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: goalway-config
+  labels:
+    app: goalway
+data:
+  # --- auth (add "oidc" once a secret with OIDC_* values exists) ---
+  AUTH_PROVIDERS: "api_key"
+
+  # --- caching (Redis below; empty REDIS_URL falls back to in-memory) ---
+  REDIS_URL: "redis://redis:6379"
+  CACHE_ENABLED: "true"
+  CACHE_TTL_SECONDS: "300"
+
+  # --- rate limiting + quotas ---
+  RATE_LIMIT: "60"
+  RATE_LIMIT_WINDOW_SECONDS: "60"
+  QUOTA_ENABLED: "true"
+  DEFAULT_QUOTA_REQUESTS: "1000"
+  QUOTA_WINDOW_SECONDS: "86400"
+
+  # --- registry / key store (mounted files, see goalway-files) ---
+  MODEL_REGISTRY_FILE: "config/models.json"
+  API_KEYS_FILE: "config/api_keys.json"
+
+  # --- RAG ---
+  RAG_RERANKER: "lexical"          # cross_encoder needs CROSS_ENCODER_URL
+  RAG_VECTOR_DB_PATH: "/app/data/vectors.db"
+  FEEDBACK_DB_PATH: "/app/data/feedback.db"
+
+  # --- tools / MCP / agents ---
+  TOOLS_ENABLED: "true"
+  MCP_ENABLED: "true"
+  AGENT_MAX_ITERATIONS: "8"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: goalway-files
+  labels:
+    app: goalway
+data:
+  models.json: |
+    {
+        "models": {
+            "rag": {
+                "provider": "rag",
+                "enabled": true,
+                "description": "Built-in extractive QA over the ingested knowledge base (no backend service)"
+            },
+            "echo": {
+                "provider": "openai_compatible",
+                "url": "http://echo-service:8080/v1/chat/completions",
+                "health_url": "http://echo-service:8080/health",
+                "backends": [
+                    "http://echo-service:8080/v1/chat/completions"
+                ],
+                "enabled": true
+            },
+            "tinyllama": {
+                "provider": "openai_compatible",
+                "url": "http://tinyllama-service:8080/v1/chat/completions",
+                "health_url": "http://tinyllama-service:8080/health",
+                "backends": [
+                    "http://tinyllama-service:8080/v1/chat/completions"
+                ],
+                "enabled": true
+            },
+            "granite": {
+                "provider": "openai_compatible",
+                "url": "http://granite-service:8080/v1/chat/completions",
+                "health_url": "http://granite-service:8080/health",
+                "backends": [
+                    "http://granite-service:8080/v1/chat/completions"
+                ],
+                "enabled": true
+            }
+        }
+    }
+  rag_config.json: |
+    {
+      "retrieval": {
+        "default_strategy": "hybrid",
+        "strategies": {
+          "lexical": {
+            "enabled": true,
+            "description": "BM25 keyword search - best for exact term matching"
+          },
+          "vector": {
+            "enabled": true,
+            "description": "Semantic search via embeddings - best for conceptual queries"
+          },
+          "hybrid": {
+            "enabled": true,
+            "description": "Combines lexical and vector via RRF - recommended for best results",
+            "candidate_multiplier": 4,
+            "rank_constant": 60
+          }
+        },
+        "auto_strategy_selection": {
+          "enabled": false,
+          "rules": {
+            "exact_match_keywords": ["id", "code", "number", "uuid", "key"],
+            "semantic_indicators": ["what", "how", "why", "explain", "describe", "similar"]
+          }
+        }
+      },
+      "filtering": {
+        "metadata": {
+          "enabled": true,
+          "max_filter_keys": 10
+        }
+      },
+      "statistics": {
+        "include_by_default": false,
+        "track_latency": true
+      }
+    }
+  api_keys.json: |
+    {
+      "redhat-demo-key": {
+        "name": "admin",
+        "role": "admin",
+        "quota": null
+      },
+      "team-user-key": {
+        "name": "platform-team",
+        "role": "user",
+        "quota": 100
+      },
+      "readonly-key": {
+        "name": "demo-readonly",
+        "role": "user",
+        "quota": 20
+      }
+    }

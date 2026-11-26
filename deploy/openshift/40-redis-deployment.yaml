@@ -1,0 +1,39 @@
+# Optional Redis for the shared response cache.
+# Ephemeral (emptyDir) on purpose -- cache contents are disposable.
+# The gateway falls back to in-memory caching if Redis is down.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: goalway
+    component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goalway
+      component: redis
+  template:
+    metadata:
+      labels:
+        app: goalway
+        component: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:6
+          # Pure cache: no RDB snapshots, no AOF. Avoids the
+          # "MISCONF: unable to persist on disk" write failures that
+          # take the whole cache down when disk is tight — cached
+          # responses are disposable by definition.
+          args: ["--save", "", "--appendonly", "no"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

@@ -1,0 +1,14 @@
+# Gateway Service (port 8080).
+apiVersion: v1
+kind: Service
+metadata:
+  name: goalway
+  labels:
+    app: goalway
+spec:
+  selector:
+    app: goalway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

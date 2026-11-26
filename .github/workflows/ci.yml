@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run test suite
+        run: pytest tests/ -q
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build gateway image
+        run: docker build -t goalway:ci .
+
+      - name: Build echo backend image
+        run: docker build -t echo-service:ci ./echo-service
+
+      - name: Smoke test (gateway + echo + redis)
+        run: |
+          docker network create demo
+          docker run -d --name redis --network demo redis:6
+          docker run -d --name echo --network demo \
+            -e OPENSHIFT_BUILD_NAME=x echo-service:ci
+          docker run -d --name gateway --network demo -p 8080:8080 \
+            -e REDIS_URL=redis://redis:6379 \
+            -e RAG_VECTOR_DB_PATH=/tmp/vectors.db \
+            goalway:ci
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/health && break || sleep 2
+          done
+          curl -sf http://localhost:8080/health
+          curl -sf -X POST http://localhost:8080/v1/chat/completions \
+            -H "X-API-Key: redhat-demo-key" -H "Content-Type: application/json" \
+            -d '{"model": "echo", "messages": [{"role": "user", "content": "ci smoke test"}]}' \
+            | grep -q "Echo: ci smoke test"
+          curl -sf http://localhost:8080/ui | grep -q "Demo Console"

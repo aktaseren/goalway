@@ -1,0 +1,183 @@
+# Tekton pipeline for the Goalway.
+#
+#   git clone -> buildah build+push (ImageStream goalway:v1.0.0)
+#   -> oc apply deploy/openshift manifests -> rollout status
+#
+# One-time setup:
+#
+#   oc new-project goalway            # or: --project in deploy.sh
+#   oc apply -f cicd/tekton-pipeline.yaml
+#   # let the pipeline SA push images + manage the project:
+#   oc policy add-role-to-user system:image-pusher -z pipeline -n goalway
+#   oc policy add-role-to-user edit -z pipeline -n goalway
+#
+# Then start a run (example at the bottom of this file).
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: gateway-git-clone
+spec:
+  description: Clone the gateway repo into the shared workspace.
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+      default: main
+  workspaces:
+    - name: source
+  steps:
+    - name: clone
+      # the cluster's own cli image ships oc AND git -- always pullable
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        git clone --depth 1 -b "$(params.revision)" \
+          "$(params.repo-url)" "$(workspaces.source.path)"
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: gateway-buildah
+spec:
+  description: Build the Dockerfile and push to the internal registry.
+  params:
+    - name: image
+      type: string
+      # e.g. image-registry.openshift-image-registry.svc:5000/goalway/goalway:v1.0.0
+    - name: dockerfile
+      type: string
+      default: Dockerfile
+  workspaces:
+    - name: source
+  steps:
+    - name: build-and-push
+      image: quay.io/buildah/stable:latest
+      # vfs storage driver: no overlay kernel mounts needed
+      env:
+        - name: STORAGE_DRIVER
+          value: vfs
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        buildah bud --storage-driver=vfs --tls-verify=false \
+          -f "$(params.dockerfile)" \
+          -t "$(params.image)" "$(workspaces.source.path)"
+        buildah push --storage-driver=vfs --tls-verify=false \
+          "$(params.image)" "docker://$(params.image)"
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: gateway-oc-deploy
+spec:
+  description: Apply deploy/openshift manifests and wait for the rollout.
+  params:
+    - name: namespace
+      type: string
+  workspaces:
+    - name: source
+  steps:
+    - name: apply
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        cd "$(workspaces.source.path)"
+
+        # apply in order (numeric prefixes); skip the example secret
+        for f in deploy/openshift/[0-9]*.yaml; do
+          oc apply -f "$f" -n "$(params.namespace)"
+        done
+
+        # create the secret from the example on first run only
+        if ! oc get secret goalway-secret -n "$(params.namespace)" >/dev/null 2>&1; then
+          echo "creating goalway-secret from secret.example.yaml (placeholders)"
+          oc apply -f deploy/openshift/secret.example.yaml -n "$(params.namespace)"
+        fi
+
+        oc rollout status deployment/goalway -n "$(params.namespace)" --timeout=300s
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: goalway-ci
+spec:
+  description: Clone, build and deploy the OpenShift AI Gateway.
+  params:
+    - name: repo-url
+      type: string
+      description: Git repository with the gateway source.
+    - name: revision
+      type: string
+      default: main
+    - name: image
+      type: string
+      default: image-registry.openshift-image-registry.svc:5000/goalway/goalway:v1.0.0
+    - name: namespace
+      type: string
+      default: goalway
+  workspaces:
+    - name: source
+  tasks:
+    - name: clone
+      taskRef:
+        name: gateway-git-clone
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.revision)
+      workspaces:
+        - name: source
+          workspace: source
+    - name: build
+      taskRef:
+        name: gateway-buildah
+      runAfter: [clone]
+      params:
+        - name: image
+          value: $(params.image)
+      workspaces:
+        - name: source
+          workspace: source
+    - name: deploy
+      taskRef:
+        name: gateway-oc-deploy
+      runAfter: [build]
+      params:
+        - name: namespace
+          value: $(params.namespace)
+      workspaces:
+        - name: source
+          workspace: source
+
+# ---------------------------------------------------------------------------
+# Example PipelineRun (copy, edit repo-url, apply -- or run from the
+# OpenShift web console Pipelines view):
+#
+# apiVersion: tekton.dev/v1beta1
+# kind: PipelineRun
+# metadata:
+#   name: goalway-ci-run
+# spec:
+#   pipelineRef:
+#     name: goalway-ci
+#   params:
+#     - name: repo-url
+#       value: https://github.com/your-org/goalway.git
+#     - name: revision
+#       value: main
+#     - name: namespace
+#       value: goalway
+#   workspaces:
+#     - name: source
+#       volumeClaimTemplate:
+#         spec:
+#           accessModes: [ReadWriteOnce]
+#           resources:
+#             requests:
+#               storage: 1Gi
+# ---------------------------------------------------------------------------

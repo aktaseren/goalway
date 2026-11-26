@@ -1,0 +1,10 @@
+# ImageStream for the gateway image.
+# The BuildConfig (11-buildconfig.yaml) pushes goalway:v1.0.0 here,
+# the Deployment (50-deployment.yaml) pulls it from the internal registry.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: goalway
+  labels:
+    app: goalway
+spec: {}

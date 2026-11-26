@@ -1,0 +1,6 @@
+apiVersion: v2
+name: goalway
+description: Goalway -- FastAPI AI gateway with RAG, MCP, tools, quotas and OIDC auth
+type: application
+version: 1.0.0
+appVersion: "v1.0.0"

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Goalway — Football News AI</title>
+<style>
+  :root {
+    --bg: #151515;
+    --panel: #1f1f1f;
+    --panel2: #262626;
+    --border: #383838;
+    --text: #f0f0f0;
+    --muted: #a0a0a0;
+    --red: #ee0000;
+    --red-soft: rgba(238, 0, 0, 0.15);
+    --green: #3fb950;
+    --green-soft: rgba(63, 185, 80, 0.15);
+    --yellow: #d29922;
+    --yellow-soft: rgba(210, 153, 34, 0.15);
+    --blue: #58a6ff;
+    --blue-soft: rgba(88, 166, 255, 0.12);
+    --radius: 8px;
+    --mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Red Hat Text", "Inter", -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 24px; background: var(--panel);
+    border-bottom: 2px solid var(--red);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header h1 span { color: var(--red); }
+  header .spacer { flex: 1; }
+  .conn { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.bad { background: var(--red); }
+  input, select, textarea, button {
+    font: inherit; color: var(--text);
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 7px 10px; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--blue); }
+  button {
+    cursor: pointer; font-weight: 500;
+    background: var(--red); border-color: var(--red); color: #fff;
+    transition: filter .15s;
+  }
+  button:hover { filter: brightness(1.15); }
+  button.secondary { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .keybox { display: flex; gap: 8px; align-items: center; }
+  .keybox input { width: 190px; font-family: var(--mono); font-size: 12px; }
+  .keybox label { font-size: 12px; color: var(--muted); }
+
+  nav {
+    display: flex; gap: 4px; padding: 10px 24px 0;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  nav button {
+    background: transparent; border: none; border-bottom: 2px solid transparent;
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 9px 16px; color: var(--muted); font-weight: 500;
+  }
+  nav button.active { color: var(--text); border-bottom-color: var(--red); }
+  nav button:hover { color: var(--text); filter: none; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  section { display: none; }
+  section.active { display: block; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; margin-bottom: 20px;
+  }
+  .card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin-bottom: 12px; }
+  .row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 120px; }
+  .row .narrow { flex: 0 0 auto; min-width: 90px; }
+  textarea { width: 100%; min-height: 84px; resize: vertical; font-family: var(--mono); font-size: 12.5px; }
+  label.small { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+
+  .badge {
+    display: inline-block; padding: 2px 9px; border-radius: 20px;
+    font-size: 11px; font-weight: 600; font-family: var(--mono);
+  }
+  .badge.green { background: var(--green-soft); color: var(--green); }
+  .badge.red { background: var(--red-soft); color: #ff6b6b; }
+  .badge.yellow { background: var(--yellow-soft); color: var(--yellow); }
+  .badge.blue { background: var(--blue-soft); color: var(--blue); }
+  .badge.gray { background: var(--panel2); color: var(--muted); }
+
+  pre.json {
+    background: #0d0d0d; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; font-family: var(--mono); font-size: 12px;
+    overflow-x: auto; max-height: 340px; overflow-y: auto; white-space: pre-wrap;
+  }
+
+  /* chat */
+  #chat-log { display: flex; flex-direction: column; gap: 10px; max-height: 420px;
+    overflow-y: auto; padding: 4px; margin-bottom: 12px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--blue-soft); border: 1px solid rgba(88,166,255,.3); }
+  .msg.assistant { align-self: flex-start; background: var(--panel2); border: 1px solid var(--border); }
+  .msg .meta { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* rag */
+  .result { border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px; margin-bottom: 12px; background: var(--panel2); }
+  .result .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .result .doc { font-family: var(--mono); font-size: 12px; color: var(--blue); }
+  mark { background: var(--yellow-soft); color: var(--yellow); border-radius: 3px; padding: 0 3px; }
+
+  /* groundedness */
+  .claim { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px;
+    border-radius: var(--radius); margin-bottom: 8px; border-left: 3px solid; }
+  .claim.supported { background: var(--green-soft); border-color: var(--green); }
+  .claim.partially_supported { background: var(--yellow-soft); border-color: var(--yellow); }
+  .claim.unsupported { background: var(--red-soft); border-color: var(--red); }
+  .claim .status { font-size: 11px; font-weight: 700; text-transform: uppercase; flex: 0 0 auto; margin-top: 2px; }
+  .claim.supported .status { color: var(--green); }
+  .claim.partially_supported .status { color: var(--yellow); }
+  .claim.unsupported .status { color: #ff6b6b; }
+  .claim .text { flex: 1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-size: 11.5px; text-transform: uppercase;
+    letter-spacing: .06em; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12.5px; }
+  .meter { background: var(--panel); border-radius: 4px; height: 8px; width: 130px; overflow: hidden; }
+  .meter > div { height: 100%; background: var(--red); }
+
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .error-msg { color: #ff6b6b; font-family: var(--mono); font-size: 12.5px;
+    padding: 10px 12px; background: var(--red-soft); border-radius: var(--radius); margin-top: 10px; }
+  .toast {
+    position: fixed; bottom: 20px; right: 20px; padding: 10px 18px;
+    background: var(--green); color: #fff; border-radius: var(--radius);
+    font-weight: 600; opacity: 0; transition: opacity .3s; z-index: 99;
+  }
+  .toast.show { opacity: 1; }
+  .section-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+  .section-title span { color: var(--muted); font-weight: 400; font-size: 13px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-family: var(--mono); font-size: 12.5px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Goalway <span>· Football News AI</span></h1>
+  <div class="spacer"></div>
+  <div class="conn"><div class="dot" id="conn-dot"></div><span id="conn-text">checking…</span></div>
+  <div class="keybox">
+    <label for="apikey">API key</label>
+    <input id="apikey" type="password" placeholder="X-API-Key">
+    <button class="secondary" id="save-key" title="Save key in this browser">Save</button>
+  </div>
+</header>
+
+<nav>
+  <button data-tab="chat" class="active">💬 Chat</button>
+  <button data-tab="rag">📚 RAG + Citations</button>
+  <button data-tab="ground">🛡️ Groundedness</button>
+  <button data-tab="mcp">🔌 MCP</button>
+  <button data-tab="admin">⚙️ Admin</button>
+</nav>
+
+<main>
+
+<!-- ============ CHAT ============ -->
+<section id="chat" class="active">
+  <div class="card">
+    <h3>Chat Completion — routed, cached, traced</h3>
+    <div class="row">
+      <div>
+        <label class="small">Model</label>
+        <select id="chat-model" style="width:100%">
+          <option value="auto">auto (intelligent routing)</option>
+          <option value="rag">rag — knowledge base (cited answers)</option>
+          <option value="echo">echo</option>
+          <option value="tinyllama">tinyllama</option>
+          <option value="granite">granite</option>
+        </select>
+      </div>
+      <div class="narrow" style="align-self:flex-end">
+        <button id="chat-clear" class="secondary">Clear</button>
+      </div>
+    </div>
+    <div id="chat-log"></div>
+    <div class="row" style="margin-bottom:0">
+      <input id="chat-input" placeholder="Ask about football news… (Enter to send)" style="flex:4">
+      <button id="chat-send" style="flex:0 0 auto">Send</button>
+    </div>
+    <div class="hint">Ask a football question — <b>auto</b> routing sends it to the <b>rag</b> model,
+      which answers from the ingested knowledge base with citations (load the news in the RAG tab first).
+      Greetings go to the cheap echo backend. Ask twice for a Redis
+      <span class="badge blue">cache hit</span>.</div>
+  </div>
+</section>
+
+<!-- ============ RAG ============ -->
+<section id="rag">
+  <div class="card">
+    <h3>Knowledge base — football news</h3>
+    <div class="row">
+      <button id="seed-btn">⚽ Load sample football news (17 articles)</button>
+      <button id="seed-clear" class="secondary" disabled>Reset knowledge base</button>
+    </div>
+    <div class="hint" id="seed-status">One click ingests 17 real football news articles through
+      <code>/v1/rag/ingest</code> — chunking, embeddings and the vector store all run behind it.</div>
+  </div>
+  <div class="card">
+    <h3>Search — hybrid retrieval → rerank → citations</h3>
+    <div class="row">
+      <div>
+        <label class="small">Query</label>
+        <input id="rag-query" style="width:100%" value="who won the champions league final">
+      </div>
+      <div class="narrow" style="flex:0 0 90px">
+        <label class="small">top k</label>
+        <input id="rag-topk" type="number" value="3" min="1" max="20">
+      </div>
+      <div class="narrow" style="align-self:flex-end"><button id="rag-search">Search</button></div>
+    </div>
+    <div class="row" id="rag-samples">
+      <button class="secondary" style="flex:1" data-q="who won the 2023 champions league final">UCL final 2023</button>
+      <button class="secondary" style="flex:1" data-q="messi transfer to inter miami">Messi transfer</button>
+      <button class="secondary" style="flex:1" data-q="rodri ballon d'or injury">Rodri story</button>
+      <button class="secondary" style="flex:1" data-q="premier league title winners">PL winners</button>
+    </div>
+    <div id="rag-stats"></div>
+    <div id="rag-results"></div>
+  </div>
+  <div class="card">
+    <h3>Ingest your own article</h3>
+    <div class="row">
+      <div class="narrow" style="flex:0 0 220px">
+        <label class="small">Document ID</label>
+        <input id="ingest-id" value="my-transfer-scoop" style="width:100%">
+      </div>
+      <div>
+        <label class="small">Text</label>
+        <input id="ingest-text" style="width:100%" value="Breaking: the striker signed a five-year contract after a record transfer fee.">
+      </div>
+      <div class="narrow" style="align-self:flex-end"><button id="ingest-btn">Ingest</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GROUNDEDNESS ============ -->
+<section id="ground">
+  <div class="card">
+    <h3>Hallucination detection — claim-level groundedness</h3>
+    <div class="row">
+      <div>
+        <label class="small">Query (retrieves football news context to check against)</label>
+        <input id="gnd-query" style="width:100%" value="who won the champions league finals">
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex:1">
+        <label class="small">Answer to check — edit freely, add a lie 😈</label>
+        <textarea id="gnd-answer">Manchester City beat Inter Milan 1-0 to win the 2023 Champions League final. Real Madrid beat Borussia Dortmund 2-0 in the 2024 final. Barcelona won the 2024 Champions League final 7-0 against Bayern Munich, a match played on the moon.</textarea>
+      </div>
+    </div>
+    <button id="gnd-check">Check groundedness</button>
+    <div id="gnd-result" style="margin-top:14px"></div>
+  </div>
+</section>
+
+<!-- ============ MCP ============ -->
+<section id="mcp">
+  <div class="card">
+    <h3>MCP server — JSON-RPC 2.0 over streamable HTTP</h3>
+    <div class="row">
+      <button id="mcp-init" class="secondary">1 · Initialize</button>
+      <button id="mcp-tools" class="secondary">2 · List tools</button>
+    </div>
+    <div class="row">
+      <div>
+        <label class="small">Tool</label>
+        <select id="mcp-tool" style="width:100%"><option>— list tools first —</option></select>
+      </div>
+      <div style="flex:2">
+        <label class="small">Arguments (JSON)</label>
+        <input id="mcp-args" style="width:100%" value='{"query": "champions league final", "top_k": 2}'>
+      </div>
+      <div class="narrow" style="align-self:flex-end"><button id="mcp-call">3 · Call</button></div>
+    </div>
+    <pre class="json" id="mcp-out">—</pre>
+  </div>
+</section>
+
+<!-- ============ ADMIN ============ -->
+<section id="admin">
+  <div class="grid">
+    <div class="card">
+      <h3>API keys &amp; quotas</h3>
+      <button id="admin-refresh" class="secondary" style="margin-bottom:12px">Refresh</button>
+      <div id="admin-keys"></div>
+    </div>
+    <div class="card">
+      <h3>Model registry</h3>
+      <div id="admin-models"></div>
+      <div class="row" style="margin-top:12px">
+        <button id="admin-reload">Reload registry + keys</button>
+      </div>
+      <div class="hint">Also re-probes backend health.</div>
+    </div>
+  </div>
+</section>
+
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const API_KEY_KEY = "ai-gateway-demo-key";
+
+let apiKey = localStorage.getItem(API_KEY_KEY) || "redhat-demo-key";
+$("apikey").value = apiKey;
+$("save-key").onclick = () => {
+  apiKey = $("apikey").value.trim();
+  localStorage.setItem(API_KEY_KEY, apiKey);
+  toast("API key saved");
+  checkHealth();
+};
+
+function toast(text) {
+  const el = $("toast");
+  el.textContent = text;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+function headers() {
+  return { "Content-Type": "application/json", "X-API-Key": apiKey };
+}
+
+async function api(method, path, body) {
+  const resp = await fetch(path, {
+    method,
+    headers: headers(),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw Object.assign(new Error(data?.detail?.error || resp.statusText),
+                         { status: resp.status, data });
+  }
+  return data;
+}
+
+function showError(container, err) {
+  const div = document.createElement("div");
+  div.className = "error-msg";
+  div.textContent = `Error ${err.status || ""}: ${err.message}` +
+    (err.data?.detail?.hint ? ` — ${err.data.detail.hint}` : "");
+  container.prepend(div);
+  setTimeout(() => div.remove(), 8000);
+}
+
+/* ---------------- health ---------------- */
+async function checkHealth() {
+  try {
+    const h = await fetch("/health").then(r => r.json());
+    $("conn-dot").className = "dot ok";
+    $("conn-text").textContent = `healthy · ${h.models?.length || 0} models`;
+  } catch {
+    $("conn-dot").className = "dot bad";
+    $("conn-text").textContent = "unreachable";
+  }
+}
+checkHealth(); setInterval(checkHealth, 15000);
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
+    btn.classList.add("active");
+    $(btn.dataset.tab).classList.add("active");
+  };
+});
+
+/* ---------------- chat ---------------- */
+const chatLog = $("chat-log");
+$("chat-send").onclick = sendChat;
+$("chat-input").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
+$("chat-clear").onclick = () => chatLog.innerHTML = "";
+
+function addMsg(role, text, metaHtml) {
+  const div = document.createElement("div");
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  if (metaHtml) {
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.innerHTML = metaHtml;
+    div.appendChild(meta);
+  }
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+  return div;
+}
+
+async function sendChat() {
+  const text = $("chat-input").value.trim();
+  if (!text) return;
+  $("chat-input").value = "";
+  addMsg("user", text);
+  const pending = addMsg("assistant", "…");
+  try {
+    const data = await api("POST", "/v1/chat/completions", {
+      model: $("chat-model").value,
+      messages: [{ role: "user", content: text }],
+    });
+    const g = data.gateway || {};
+    const badges = [
+      badge(g.model || $("chat-model").value, "gray"),
+      g.cache === "hit" ? badge("cache hit", "blue") : badge("cache miss", "gray"),
+      g.latency_ms != null ? badge(`${g.latency_ms} ms`, "gray") : "",
+      g.failover_from ? badge(`failover: ${g.failover_from} → ${g.model}`, "yellow") : "",
+      g.citations?.length ? badge(`${g.citations.length} citations`, "green") : "",
+      g.trace_id ? `<span title="${g.trace_id}">${badge("trace " + g.trace_id.slice(0, 8), "yellow")}</span>` : "",
+    ].join(" ");
+    pending.textContent = data.choices?.[0]?.message?.content || "(empty)";
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.innerHTML = badges;
+    pending.appendChild(meta);
+  } catch (err) {
+    pending.textContent = "✖ " + err.message;
+    pending.style.color = "#ff6b6b";
+  }
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function badge(text, cls) { return `<span class="badge ${cls}">${text}</span>`; }
+
+/* ---------------- rag ---------------- */
+
+const FOOTBALL_NEWS = [
+  {id:"ucl-final-2025", text:"Paris Saint-Germain won the 2025 Champions League final, thrashing Inter Milan 5-0 in Munich — the biggest winning margin in a European Cup final. Goals from Achraf Hakimi, Desire Doue (twice), Kvicha Kvaratskhelia and Senny Mayulu sealed PSG's first Champions League title, making them the first French club to win Europe's top prize since Marseille in 1993."},
+  {id:"ballon-or-2025", text:"Ousmane Dembele won the 2025 Ballon d'Or, capping a treble-winning season with Paris Saint-Germain in which he scored more than 30 goals. The French forward beat Lamine Yamal and Vitinha to the award. Dembele had also been named Player of the Tournament at the Club World Cup."},
+  {id:"ucl-final-2023", text:"Manchester City completed the treble by winning the 2023 Champions League final, beating Inter Milan 1-0 in Istanbul. Rodri scored the only goal in the 68th minute. It was City's first Champions League title, making them the second English club after Manchester United in 1999 to win the Premier League, FA Cup and Champions League in the same season."},
+  {id:"ucl-final-2024", text:"Real Madrid won the 2024 Champions League final, beating Borussia Dortmund 2-0 at Wembley. Dani Carvajal opened the scoring in the 74th minute and Vinicius Junior sealed the victory nine minutes later. It was Real Madrid's 15th European Cup, extending their record."},
+  {id:"messi-inter-miami", text:"Lionel Messi joined Inter Miami in July 2023 after leaving Paris Saint-Germain. The move to Major League Soccer was announced with a highlight video. Messi won the Ballon d'Or in 2023, his eighth, after captaining Argentina to the 2022 World Cup title in Qatar."},
+  {id:"world-cup-2022-final", text:"Argentina won the 2022 World Cup, beating France on penalties after a 3-3 draw in one of the greatest finals ever played. Messi scored twice and Kylian Mbappe scored a hat-trick for France. The match was played at Lusail Stadium in Qatar on 18 December 2022."},
+  {id:"pl-2023-24-title", text:"Manchester City won the 2023-24 Premier League title, their fourth consecutive championship, finishing two points ahead of Arsenal. Pep Guardiola's side clinched the title on the final day with a 3-1 win over West Ham. No team had ever won four consecutive English top-flight titles before."},
+  {id:"pl-2024-25-title", text:"Liverpool won the 2024-25 Premier League title, equalling Manchester United's record of 20 English league championships. Under new head coach Arne Slot, Liverpool secured the title with matches to spare. Mohamed Salah was the standout player of the season with more than 25 goal involvements."},
+  {id:"ballon-or-2024", text:"Rodri won the 2024 Ballon d'Or, becoming the first Spanish player to win the award since Luis Suarez in 1960. The Manchester City midfielder beat Vinicius Junior to the prize. Rodri had won Euro 2024 with Spain and the Premier League with City that year."},
+  {id:"euro-2024-final", text:"Spain won Euro 2024, beating England 2-1 in the final in Berlin. Mikel Oyarzabal scored the winning goal in the 86th minute after Cole Palmer had equalised for England. Spain won all seven of their matches at the tournament, a record for a European Championship."},
+  {id:"mbappe-real-madrid", text:"Kylian Mbappe joined Real Madrid in summer 2024 on a free transfer after his contract with Paris Saint-Germain expired. The French striker had been PSG's all-time top scorer with 256 goals. Mbappe took the number 9 shirt at Madrid before switching to number 10 following Luka Modric's departure."},
+  {id:"kane-bundesliga", text:"Harry Kane won his first major trophy in 2025 as Bayern Munich claimed the Bundesliga title. Kane had joined Bayern from Tottenham in August 2023 for a reported 100 million euros. He scored more than 30 league goals in each of his first two Bundesliga seasons."},
+  {id:"injury-news-demo", text:"Manchester City midfielder Rodri suffered an anterior cruciate ligament injury in September 2024 during a match against Arsenal. The injury ruled him out for the remainder of the 2024-25 season. City's form dipped significantly during his absence, illustrating his importance to the team."},
+  {id:"var-explainer", text:"The Video Assistant Referee, known as VAR, reviews decisions on goals, penalties, red cards and mistaken identity. VAR was introduced in the Premier League in the 2019-20 season. Semi-automated offside technology was later adopted in the Champions League to speed up offside decisions."},
+  {id:"transfer-window-record", text:"The 2024 summer transfer window set a new global spending record, with Premier League clubs alone spending more than 2 billion pounds. The most expensive transfer of the window was Julian Alvarez's move from Manchester City to Atletico Madrid for a reported 75 million pounds plus add-ons."},
+  {id:"wsl-growth", text:"The Women's Super League achieved record attendance figures in the 2023-24 season, with average crowds surpassing 7,000 for the first time. Chelsea won the 2023-24 WSL title on goal difference ahead of Manchester City. The league signed a landmark domestic broadcast deal worth at least 40 million pounds over four years."},
+  {id:"copa-america-2024", text:"Argentina won the 2024 Copa America, beating Colombia 1-0 in the final in Miami after extra time. Lautaro Martinez scored the winning goal in the 112th minute. It was Argentina's 16th Copa America title and their third consecutive major tournament win after the 2021 Copa America and the 2022 World Cup."},
+];
+
+$("seed-btn").onclick = async () => {
+  const btn = $("seed-btn"), status = $("seed-status");
+  btn.disabled = true;
+  btn.textContent = "Ingesting…";
+  let chunks = 0;
+  try {
+    for (const doc of FOOTBALL_NEWS) {
+      const d = await api("POST", "/v1/rag/ingest", {
+        document_id: doc.id, text: doc.text,
+      });
+      chunks += d.chunks_created;
+    }
+    status.innerHTML = `✅ Seeded ${FOOTBALL_NEWS.length} articles (${chunks} chunks). ` +
+      `Now search below — try the sample questions!`;
+    toast(`Seeded ${FOOTBALL_NEWS.length} football articles`);
+    $("seed-clear").disabled = false;
+  } catch (err) {
+    status.textContent = "Seeding failed: " + err.message;
+  }
+  btn.disabled = false;
+  btn.textContent = "⚽ Load sample football news (17 articles)";
+};
+
+$("seed-clear").onclick = () => {
+  // vectors persist across restarts; the button just explains this
+  toast("Knowledge base persists (SQLite volume) — redeploy for a clean slate");
+};
+
+document.querySelectorAll("#rag-samples button").forEach(btn => {
+  btn.onclick = () => {
+    $("rag-query").value = btn.dataset.q;
+    $("rag-search").click();
+  };
+});
+
+$("ingest-btn").onclick = async () => {
+  try {
+    const d = await api("POST", "/v1/rag/ingest", {
+      document_id: $("ingest-id").value,
+      text: $("ingest-text").value,
+    });
+    toast(`Ingested “${d.document_id}” — ${d.chunks_created} chunk(s)`);
+  } catch (err) { toast("Ingest failed: " + err.message); }
+};
+
+let lastSearch = null;
+
+$("rag-search").onclick = async () => {
+  const out = $("rag-results"), stats = $("rag-stats");
+  out.innerHTML = stats.innerHTML = "";
+  try {
+    const query = $("rag-query").value;
+    const d = await api("POST", "/v1/rag/search", {
+      query, top_k: parseInt($("rag-topk").value) || 3, include_stats: true,
+    });
+    lastSearch = d;
+
+    if (d.stats) {
+      stats.innerHTML = `<div class="row" style="margin-bottom:14px">
+        ${badge("strategy: " + d.stats.strategy, "blue")}
+        ${badge(`${d.stats.total_latency_ms?.toFixed(2) || "?"} ms`, "gray")}
+        ${badge(`lexical ${d.stats.lexical_candidates} · vector ${d.stats.vector_candidates}`, "gray")}
+      </div>`;
+    }
+
+    if (!d.results.length) {
+      out.innerHTML = `<div class="hint">No results — ingest a document above first.</div>`;
+      return;
+    }
+
+    d.results.forEach((r, i) => {
+      const citation = d.citations?.[i];
+      const div = document.createElement("div");
+      div.className = "result";
+
+      // highlight citation spans inside the chunk text
+      let textHtml = escapeHtml(r.text);
+      if (citation?.spans?.length) {
+        textHtml = highlightSpans(r.text, citation.spans);
+      }
+
+      div.innerHTML = `
+        <div class="head">
+          <span class="doc">${citation ? citation.citation_id : ""} ${r.document_id} · chunk ${r.position}</span>
+          ${r.reranker ? badge(`rerank ${r.rerank_score} (${r.reranker})`, "yellow") : ""}
+          ${badge("score " + r.score.toFixed(4), "gray")}
+        </div>
+        <div>${textHtml}</div>
+        <div style="margin-top:10px; display:flex; gap:6px">
+          <button class="secondary" style="padding:3px 10px; font-size:12px" data-fb="1">👍</button>
+          <button class="secondary" style="padding:3px 10px; font-size:12px" data-fb="-1">👎</button>
+        </div>`;
+      div.querySelector('[data-fb="1"]').onclick = () => sendFeedback(1, r.document_id);
+      div.querySelector('[data-fb="-1"]').onclick = () => sendFeedback(-1, r.document_id);
+      out.appendChild(div);
+    });
+  } catch (err) { showError(out, err); }
+};
+
+async function sendFeedback(rating, document_id) {
+  try {
+    await api("POST", "/v1/rag/feedback", {
+      rating, document_id,
+      query: lastSearch?.query || "", search_id: lastSearch?.search_id || "",
+    });
+    toast(rating === 1 ? "Thanks! Feedback recorded 👍" : "Feedback recorded 👎");
+  } catch (err) { toast("Feedback failed: " + err.message); }
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function highlightSpans(text, spans) {
+  // spans: [{start, end}] — merge and wrap in <mark>
+  const sorted = [...spans].sort((a, b) => a.start - b.start);
+  let html = "", pos = 0;
+  for (const span of sorted) {
+    if (span.start < pos) continue;
+    html += escapeHtml(text.slice(pos, span.start));
+    html += "<mark>" + escapeHtml(text.slice(span.start, span.end)) + "</mark>";
+    pos = span.end;
+  }
+  html += escapeHtml(text.slice(pos));
+  return html;
+}
+
+/* ---------------- groundedness ---------------- */
+$("gnd-check").onclick = async () => {
+  const out = $("gnd-result");
+  out.innerHTML = "";
+  try {
+    const d = await api("POST", "/v1/rag/groundedness", {
+      query: $("gnd-query").value,
+      answer: $("gnd-answer").value,
+    });
+    const verdictCls = d.verdict === "grounded" ? "green" : d.verdict === "partially_grounded" ? "yellow" : "red";
+    out.innerHTML = `
+      <div class="row" style="margin-bottom:14px">
+        ${badge(d.verdict.replace(/_/g, " "), verdictCls)}
+        ${badge(`groundedness ${Math.round(d.groundedness_score * 100)}%`, verdictCls)}
+        ${badge(`${d.supported_claims}/${d.total_claims} claims supported`, "gray")}
+      </div>`;
+    d.claims.forEach(c => {
+      const div = document.createElement("div");
+      div.className = `claim ${c.status}`;
+      div.innerHTML = `<span class="status">${c.status.replace(/_/g, " ")}</span>
+        <span class="text">${escapeHtml(c.claim)}</span>
+        <span class="badge gray">${Math.round(c.support * 100)}%</span>`;
+      out.appendChild(div);
+    });
+  } catch (err) { showError(out, err); }
+};
+
+/* ---------------- mcp ---------------- */
+let mcpId = 0;
+async function mcpCall(method, params) {
+  return api("POST", "/mcp", { jsonrpc: "2.0", id: ++mcpId, method, params });
+}
+
+$("mcp-init").onclick = async () => {
+  const out = $("mcp-out");
+  try {
+    const d = await mcpCall("initialize", {});
+    out.textContent = JSON.stringify(d, null, 2);
+    toast(`Connected: ${d.result?.serverInfo?.name} v${d.result?.serverInfo?.version}`);
+  } catch (err) { out.textContent = "Error: " + err.message; }
+};
+
+$("mcp-tools").onclick = async () => {
+  const out = $("mcp-out"), sel = $("mcp-tool");
+  try {
+    const d = await mcpCall("tools/list", {});
+    out.textContent = JSON.stringify(d, null, 2);
+    sel.innerHTML = "";
+    d.result.tools.forEach(t => {
+      const opt = document.createElement("option");
+      opt.value = t.name;
+      opt.textContent = `${t.name} — ${t.description.slice(0, 60)}`;
+      sel.appendChild(opt);
+    });
+    toast(`${d.result.tools.length} tools available`);
+  } catch (err) { out.textContent = "Error: " + err.message; }
+};
+
+$("mcp-call").onclick = async () => {
+  const out = $("mcp-out");
+  const name = $("mcp-tool").value;
+  if (!name) { out.textContent = "List tools first."; return; }
+  let args = {};
+  try { args = JSON.parse($("mcp-args").value || "{}"); }
+  catch { out.textContent = "Arguments are not valid JSON."; return; }
+  try {
+    const d = await mcpCall("tools/call", { name, arguments: args });
+    out.textContent = JSON.stringify(d, null, 2);
+  } catch (err) { out.textContent = "Error: " + err.message; }
+};
+
+/* ---------------- admin ---------------- */
+$("admin-refresh").onclick = loadAdmin;
+$("admin-reload").onclick = async () => {
+  try {
+    const d = await api("POST", "/admin/reload", {});
+    toast(`Reloaded — ${d.models?.length} models, ${d.api_keys_loaded} keys`);
+    loadAdmin();
+  } catch (err) { toast("Reload failed: " + err.message); }
+};
+
+async function loadAdmin() {
+  const keysEl = $("admin-keys"), modelsEl = $("admin-models");
+  keysEl.innerHTML = modelsEl.innerHTML = "";
+  try {
+    const [keys, quota] = await Promise.all([
+      api("GET", "/admin/keys"), api("GET", "/admin/quota"),
+    ]);
+    let html = `<table><tr><th>key</th><th>role</th><th>quota</th><th>used</th></tr>`;
+    keys.keys.forEach(k => {
+      const q = quota.usage[k.name];
+      const pct = q ? Math.min(100, (q.used / q.limit) * 100) : 0;
+      html += `<tr>
+        <td>${k.key_preview}</td>
+        <td>${badge(k.role, k.role === "admin" ? "red" : "blue")}</td>
+        <td><div class="meter"><div style="width:${pct}%"></div></div></td>
+        <td>${q ? q.used + "/" + q.limit : "—"}</td></tr>`;
+    });
+    keysEl.innerHTML = html + "</table>";
+
+    const health = await fetch("/health").then(r => r.json());
+    let mh = `<table><tr><th>model</th><th>status</th></tr>`;
+    (health.models || []).forEach(m => {
+      const ok = health.model_health?.[m];
+      mh += `<tr><td>${m}</td><td>${ok === undefined ? badge("unknown", "gray")
+        : ok ? badge("healthy", "green") : badge("unhealthy", "red")}</td></tr>`;
+    });
+    modelsEl.innerHTML = mh + "</table>";
+  } catch (err) {
+    keysEl.innerHTML = `<div class="error-msg">Admin endpoints need an admin API key (try redhat-demo-key): ${err.message}</div>`;
+  }
+}
+loadAdmin();
+</script>
+</body>
+</html>

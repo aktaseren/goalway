@@ -1,0 +1,51 @@
+# OpenShift AI Gateway V17 — local demo stack.
+#
+#   docker compose up --build
+#   open http://localhost:8080/ui
+#
+# Runs the full gateway (RAG, MCP, tools, auth) plus the echo model
+# backend and Redis — no OpenShift and no GPU required.
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      REDIS_URL: redis://redis:6379
+      RAG_VECTOR_DB_PATH: /app/data/vectors.db
+      FEEDBACK_DB_PATH: /app/data/feedback.db
+      RATE_LIMIT: "60"
+    volumes:
+      - gateway-data:/app/data
+    depends_on:
+      echo-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  echo-service:
+    build:
+      context: ./echo-service
+      dockerfile: Dockerfile
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:6
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  gateway-data:

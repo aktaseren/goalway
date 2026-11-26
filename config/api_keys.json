@@ -1,0 +1,17 @@
+{
+  "redhat-demo-key": {
+    "name": "admin",
+    "role": "admin",
+    "quota": null
+  },
+  "team-user-key": {
+    "name": "platform-team",
+    "role": "user",
+    "quota": 100
+  },
+  "readonly-key": {
+    "name": "demo-readonly",
+    "role": "user",
+    "quota": 20
+  }
+}

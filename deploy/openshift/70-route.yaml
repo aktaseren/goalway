@@ -1,0 +1,16 @@
+# Route exposing the gateway. 5m timeout like k8s/route.yaml --
+# chat completions and agent runs can be slow with cold backends.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: goalway
+  labels:
+    app: goalway
+  annotations:
+    haproxy.router.openshift.io/timeout: 5m
+spec:
+  to:
+    kind: Service
+    name: goalway
+  port:
+    targetPort: http

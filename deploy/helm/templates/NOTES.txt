@@ -1,0 +1,42 @@
+Goalway ({{ .Chart.AppVersion }}) deployed as "{{ include "goalway.fullname" . }}".
+
+{{- if .Values.route.enabled }}
+
+1. Get the gateway route URL:
+
+  export GATEWAY_URL="http://$(oc get route {{ include "goalway.fullname" . }} -o jsonpath='{.spec.host}')"
+{{- else }}
+
+1. No Route was created (route.enabled=false). Reach the gateway via the
+   service: {{ include "goalway.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+{{- end }}
+
+2. Try it:
+
+  # health
+  curl -s "$GATEWAY_URL/health" | python3 -m json.tool
+
+  # chat completion (echo backend needs no GPU)
+  curl -s -X POST "$GATEWAY_URL/v1/chat/completions" \
+    -H "X-API-Key: redhat-demo-key" -H "Content-Type: application/json" \
+    -d '{"model": "echo", "messages": [{"role": "user", "content": "hello gateway"}]}' \
+    | python3 -m json.tool
+
+  # full end-to-end demo (RAG, MCP, groundedness, feedback, evaluation)
+  ./examples/demo.sh "$GATEWAY_URL"
+
+{{- if not .Values.secret.create }}
+{{- if not .Values.secret.existingSecret }}
+
+Note: no Secret was configured (API-key auth only). Set secret.create
+with values, or secret.existingSecret, to enable OIDC and enterprise
+tool credentials.
+{{- end }}
+{{- end }}
+{{- if .Values.redis.enabled }}
+
+Redis cache: {{ include "goalway.fullname" . }}-redis:6379 (REDIS_URL is set automatically).
+{{- else }}
+
+Redis is disabled -- the gateway uses an in-memory response cache.
+{{- end }}
