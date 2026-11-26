@@ -42,7 +42,9 @@ jobs:
         run: |
           docker network create demo
           docker run -d --name redis --network demo redis:6
-          docker run -d --name echo --network demo echo-service:ci
+          # Container name must be echo-service: models.json reaches
+          # the backend at http://echo-service:8080 (docker DNS).
+          docker run -d --name echo-service --network demo echo-service:ci
           docker run -d --name gateway --network demo -p 8080:8080 \
             -e REDIS_URL=redis://redis:6379 \
             -e RAG_VECTOR_DB_PATH=/tmp/vectors.db \
