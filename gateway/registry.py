@@ -45,21 +45,38 @@ def is_model_healthy(model_name: str):
 
 def start_background_health_refresh(interval_seconds: int = 60):
     """
-    probe all backend health endpoints on startup and keep
-    refreshing them in the background so the gateway is usable
-    immediately after a rollout (no manual /admin/reload needed).
+    Probe all backend health endpoints on startup and keep refreshing
+    them in the background so the gateway is usable immediately after
+    a rollout (no manual /admin/reload needed).
+
+    Probes run every few seconds while the stack is still settling
+    (backends boot at different rates), then relax to the normal
+    interval once health is stable.
     """
     import threading
+    import time
 
     def _loop():
+        settle_interval = 5
+        stable_count = 0
+
         while True:
             try:
+                before = dict(MODEL_HEALTH)
                 refresh_health()
+
+                if MODEL_HEALTH and MODEL_HEALTH == before:
+                    stable_count += 1
+                else:
+                    stable_count = 0
             except Exception:
                 pass
-            import time
 
-            time.sleep(interval_seconds)
+            time.sleep(
+                interval_seconds
+                if stable_count >= 3
+                else settle_interval
+            )
 
     thread = threading.Thread(
         target=_loop,
