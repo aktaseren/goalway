@@ -668,7 +668,26 @@ def rag_chat_completion(
         os.getenv("RAG_RERANK_CANDIDATES_MULTIPLIER", "4")
     )
 
-    results, _ = rag_service.search(query=prompt, top_k=retrieve_k)
+    # Source references ("turkish news", "bbc news") filter retrieval
+    # BY METADATA — Turkish headlines never contain the English word
+    # "turkish", so text-based ranking cannot find them without it.
+    from gateway.rag.qa import extract_source_filter
+    from gateway.rag.retrievers import MetadataFilter
+
+    _source_filter, source_aliases = extract_source_filter(prompt)
+
+    retrieval_filter = None
+
+    if _source_filter:
+        retrieval_filter = MetadataFilter(
+            values={"source": {"$in": sorted(_source_filter)}}
+        )
+
+    results, _ = rag_service.search(
+        query=prompt,
+        top_k=retrieve_k,
+        metadata_filter=retrieval_filter,
+    )
 
     if RAG_RERANK_ENABLED and results:
         results = create_reranker().rerank(
@@ -683,7 +702,14 @@ def rag_chat_completion(
     # these — stop-word overlap inflates them. Enumeration questions
     # strip their shape words ("top", "news", "sport"...): a pure
     # "top 5 news" has nothing topical to gate on (None -> accept),
-    # while "top 5 messi news" still gates on "messi".
+    # while "top 5 messi news" still gates on "messi". Source
+    # references ("turkish", "bbc") are satisfied by metadata
+    # filtering, never by text coverage.
+    gate_stop: frozenset | set = source_aliases
+
+    if requested_count:
+        gate_stop = gate_stop | _ENUM_TERMS
+
     min_coverage = float(os.getenv("RAG_MIN_ANSWER_COVERAGE", "0.25"))
 
     top_score = 0.0
@@ -699,7 +725,7 @@ def rag_chat_completion(
         top_coverage = gate_coverage(
             prompt,
             results[0].chunk.text,
-            extra_stop=_ENUM_TERMS if requested_count else frozenset(),
+            extra_stop=gate_stop,
         )
 
     # None means "no topical terms to gate on" — accept.
@@ -719,7 +745,9 @@ def rag_chat_completion(
                 refresh_news()
 
                 results, _ = rag_service.search(
-                    query=prompt, top_k=retrieve_k
+                    query=prompt,
+                    top_k=retrieve_k,
+                    metadata_filter=retrieval_filter,
                 )
 
                 if RAG_RERANK_ENABLED and results:
@@ -738,9 +766,7 @@ def rag_chat_completion(
                     top_coverage = gate_coverage(
                         prompt,
                         results[0].chunk.text,
-                        extra_stop=(
-                            _ENUM_TERMS if requested_count else frozenset()
-                        ),
+                        extra_stop=gate_stop,
                     )
 
                 chunk_gate_failed = top_coverage is not None and (
@@ -779,7 +805,7 @@ def rag_chat_completion(
         answer_coverage = gate_coverage(
             prompt,
             answer_body,
-            extra_stop=_ENUM_TERMS if requested_count else frozenset(),
+            extra_stop=gate_stop,
         )
 
         if (
@@ -903,17 +929,35 @@ def _auto_news_refresh_allowed() -> bool:
 
 def _decline_message(prompt: str, horizon: int | None) -> str:
     """Topic-aware decline: name what couldn't be found."""
-    from gateway.rag.qa import extract_topic
+    from gateway.rag.qa import extract_source_filter, extract_topic
 
+    source_filter, _aliases = extract_source_filter(prompt)
     topic = extract_topic(prompt)
+
+    if source_filter and topic:
+        return (
+            f"I don't have any news about {topic} from "
+            + " or ".join(sorted(source_filter))
+            + " in my knowledge base"
+            + (f" (news through {horizon})" if horizon else "")
+            + ". Try fetching live news, or ask 'top 5 news' to see "
+            "what is currently covered."
+        )
+
+    if source_filter:
+        return (
+            "I don't have any news from "
+            + " or ".join(sorted(source_filter))
+            + " in my knowledge base. Try fetching live news first."
+        )
 
     if topic:
         return (
             f"I don't have any news about {topic} in my knowledge base"
             + (f" (news through {horizon})" if horizon else "")
-            + ". My sources are BBC Sport, Sky Sports and CNN Sport — "
-            "they may not cover it. Try fetching live news, or ask "
-            "'top 5 news' to see what they do cover."
+            + ". My sources are BBC Sport, Sky Sports, CNN Sport and "
+            "TRT Spor — they may not cover it. Try fetching live "
+            "news, or ask 'top 5 news' to see what they do cover."
         )
 
     return (

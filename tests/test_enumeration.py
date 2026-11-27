@@ -193,7 +193,7 @@ def test_news_decline_names_the_topic(monkeypatch):
     content = response.json()["choices"][0]["message"]["content"]
 
     assert "news about galatasaray" in content
-    assert "BBC Sport, Sky Sports and CNN Sport" in content
+    assert "BBC Sport, Sky Sports, CNN Sport and TRT Spor" in content
 
 
 def test_news_query_triggers_one_auto_refresh(monkeypatch):
@@ -281,3 +281,92 @@ def test_news_routing_goes_directly_to_rag(monkeypatch):
 
     assert data["gateway"]["model"] == "rag"
     assert data["gateway"]["failover_from"] is None
+
+
+def test_extract_source_filter():
+    from gateway.rag.qa import extract_source_filter
+
+    sources, aliases = extract_source_filter(
+        "top 3 turkish football news"
+    )
+
+    assert sources == {"trt-spor"}
+    assert aliases == {"turkish"}
+
+    sources, _ = extract_source_filter("bbc news about arsenal")
+    assert sources == {"bbc-sport-football"}
+
+    sources, _ = extract_source_filter("who won the champions league")
+    assert sources == set()
+
+
+TURKISH_NEWS = [
+    ("trt-1", 2026, "trt-spor", "Besiktas kafilesi yurda dondu."),
+    ("trt-2", 2026, "trt-spor", "Super Lig yayin ihalesi yapilacak."),
+    ("trt-3", 2026, "trt-spor", "Fenerbahce maçi TRT 1'de."),
+    ("bbc-1", 2026, "bbc-sport-football", "Arsenal beat Chelsea 2-1."),
+]
+
+
+class FakeMultiSourceRAG:
+    def search(self, query, top_k=5, **kwargs):
+        return (
+            [
+                SearchResult(
+                    chunk=DocumentChunk(
+                        chunk_id=f"{doc_id}-0",
+                        document_id=doc_id,
+                        text=text,
+                        position=0,
+                        metadata={"year": year, "source": source},
+                    ),
+                    score=0.9,
+                )
+                for doc_id, year, source, text in TURKISH_NEWS
+            ],
+            None,
+        )
+
+    def get_document(self, document_id):
+        return []
+
+
+def test_turkish_news_filters_by_source(monkeypatch):
+    """'top 3 turkish football news' filters by source metadata —
+    TRT headlines are in Turkish and never contain the English word
+    'turkish', so text gates must not apply."""
+    monkeypatch.setattr(api_module, "rag_service", FakeMultiSourceRAG())
+
+    response = client.post(
+        "/v1/chat/completions",
+        headers={"X-API-Key": "redhat-demo-key"},
+        json={
+            "model": "rag",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "tell me top 3 turkish football news",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    content = data["choices"][0]["message"]["content"]
+
+    lines = [
+        line
+        for line in content.split("\n")
+        if line.strip() and line.strip()[0].isdigit()
+    ]
+
+    # three items, ALL from trt-spor, none from the BBC item
+    assert len(lines) == 3
+    assert "Besiktas" in content or "Fenerbahce" in content
+    assert "Arsenal" not in content
+
+    cited_docs = [c["document_id"] for c in data["gateway"]["citations"]]
+
+    assert all(doc.startswith("trt-") for doc in cited_docs)

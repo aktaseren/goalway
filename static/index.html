@@ -216,7 +216,7 @@
     <h3>Knowledge base — football news</h3>
     <div class="row">
       <button id="seed-btn">⚽ Load sample football news (18 articles)</button>
-      <button id="news-btn" class="secondary">📡 Fetch live news (BBC · Sky · CNN)</button>
+      <button id="news-btn" class="secondary">📡 Fetch live news (BBC · Sky · CNN · TRT)</button>
     </div>
     <div class="hint" id="seed-status">One click ingests 18 real football news articles through
       <code>/v1/rag/ingest</code> — chunking, embeddings and the vector store all run behind it.
@@ -514,7 +514,7 @@ $("news-btn").onclick = async () => {
     status.textContent = "News fetch failed: " + err.message;
   }
   btn.disabled = false;
-  btn.textContent = "📡 Fetch live news (BBC · Sky · CNN)";
+  btn.textContent = "📡 Fetch live news (BBC · Sky · CNN · TRT)";
 };
 
 document.querySelectorAll("#rag-samples button").forEach(btn => {

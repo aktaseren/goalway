@@ -168,3 +168,4 @@ def test_default_sources_configured():
     assert "bbc-sport-football" in names
     assert "sky-sports-football" in names
     assert "cnn-sport" in names
+    assert "trt-spor" in names

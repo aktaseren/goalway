@@ -50,9 +50,51 @@ ENUMERATION_TERMS = {
     "todays",
     "sport",
     "sports",
+    "football",
+    "soccer",
     "show",
     "give",
 }
+
+# Source references: queries like "turkish football news" or "bbc
+# news" filter BY SOURCE, not by article text — TRT headlines are in
+# Turkish and never contain the English word "turkish".
+SOURCE_ALIASES = {
+    "trt": "trt-spor",
+    "trt-spor": "trt-spor",
+    "turkish": "trt-spor",
+    "turkiye": "trt-spor",
+    "turkey": "trt-spor",
+    "bbc": "bbc-sport-football",
+    "bbc-sport": "bbc-sport-football",
+    "british": "bbc-sport-football",
+    "english": "bbc-sport-football",
+    "sky": "sky-sports-football",
+    "skysports": "sky-sports-football",
+    "cnn": "cnn-sport",
+    "american": "cnn-sport",
+}
+
+
+def extract_source_filter(
+    query: str,
+) -> tuple[set[str], set[str]]:
+    """
+    Source references in a query -> (source names, matched aliases).
+
+    "top 3 turkish football news" -> ({"trt-spor"}, {"turkish"})
+    """
+    terms = set(_tokenize(query))
+
+    sources: set[str] = set()
+    aliases: set[str] = set()
+
+    for alias, source in SOURCE_ALIASES.items():
+        if alias in terms:
+            sources.add(source)
+            aliases.add(alias)
+
+    return sources, aliases
 
 def _stem(token: str) -> str:
     """
@@ -390,9 +432,28 @@ def build_extractive_answer(
     list_mode = is_list_question(query) and not requested_count
     count_mode = requested_count is not None
 
+    # Source references ("turkish news", "bbc news") filter by
+    # metadata, not text.
+    source_filter, _aliases = extract_source_filter(query)
+
     # Order first, then build citations from the ordered results so
     # citation ids stay aligned with the quoted documents.
     ordered = _recency_order(results)
+
+    if source_filter:
+        ordered = [
+            result
+            for result in ordered
+            if result.chunk.metadata.get("source") in source_filter
+        ]
+
+    if not ordered:
+        return (
+            "I don't have any news from "
+            + " or ".join(sorted(source_filter))
+            + " in my knowledge base. Try fetching live news first.",
+            [],
+        )
 
     if count_mode:
         # Enumerations are newest-first news semantics.

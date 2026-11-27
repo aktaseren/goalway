@@ -28,6 +28,10 @@ DEFAULT_SOURCES = [
         "name": "cnn-sport",
         "url": "http://rss.cnn.com/rss/edition_sport.rss",
     },
+    {
+        "name": "trt-spor",
+        "url": "https://www.trthaber.com/spor_articles.rss",
+    },
 ]
 
 
