@@ -56,6 +56,10 @@ header "2. Seed knowledge base with football news"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 "$SCRIPT_DIR/seed_football.py" "$API_URL" "$API_KEY"
 
+# 2b. fetch live news from trusted sources --------------------------------
+header "2b. Fetch live news (BBC Sport · Sky Sports · CNN Sport · TRT Spor)"
+post "/v1/news/refresh" '{}'
+
 # 3. RAG search with citations -------------------------------------------
 header "3. RAG: search with citations + stats"
 post "/v1/rag/search" '{
@@ -107,11 +111,23 @@ post "/mcp" '{
   }
 }'
 
-# 8. chat completion (echo backend) -----------------------------------------
-header "8. Chat completion (model=auto → football routing)"
+# 8. chat completions ------------------------------------------------------
+header "8. Chat: enumeration — top 5 news (numbered, cited)"
 post "/v1/chat/completions" '{
   "model": "auto",
-  "messages": [{"role": "user", "content": "who won the 2023 champions league final"}]
+  "messages": [{"role": "user", "content": "tell me top 5 todays sport news"}]
+}'
+
+header "8b. Chat: source-aware — turkish news (metadata-filtered retrieval)"
+post "/v1/chat/completions" '{
+  "model": "auto",
+  "messages": [{"role": "user", "content": "tell me top 3 turkish football news"}]
+}'
+
+header "8c. Chat: recency — last champions league winner"
+post "/v1/chat/completions" '{
+  "model": "auto",
+  "messages": [{"role": "user", "content": "who won the last champions league final"}]
 }'
 
 header "Demo complete"

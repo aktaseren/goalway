@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/aktaseren/goalway/actions/workflows/ci.yml/badge.svg)](https://github.com/aktaseren/goalway/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-317%20passing-brightgreen)](#tests)
+[![Tests](https://img.shields.io/badge/tests-343%20passing-brightgreen)](#tests)
 [![OpenShift](https://img.shields.io/badge/OpenShift-4.x-red)](https://www.redhat.com/en/technologies/cloud-computing/openshift)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
@@ -28,9 +28,9 @@ flowchart LR
     C[Clients<br/>API key / OIDC] --> GW[FastAPI Gateway<br/>auth · RBAC · quotas<br/>rate limits · Redis cache]
     GW --> B1[rag<br/>built-in, cited]
     GW --> B2[echo / granite / vLLM<br/>Ollama · plugins]
-    GW --> RAG[RAG pipeline<br/>chunk → embed → hybrid retrieve<br/>→ rerank → citations]
+    N[BBC · Sky · CNN · TRT<br/>RSS feeds] -->|news_fetch<br/>+ scheduler| RAG[RAG pipeline<br/>chunk → embed → hybrid retrieve<br/>→ rerank → citations]
     RAG --> G[Groundedness<br/>+ LLM-as-judge]
-    GW --> T[Tool registry<br/>K8s · GitHub · ArgoCD]
+    GW --> T[Tool registry<br/>K8s · GitHub · ArgoCD · news]
     T --> MCP[MCP server /mcp]
     GW --> A[Agent orchestration<br/>planner → researcher<br/>→ executor → reviewer]
     A -.-> T
@@ -46,10 +46,10 @@ page, no build tooling, talking to the gateway's own APIs:
 
 | Tab | What it shows |
 |---|---|
-| 💬 Chat | Ask *"Tell me who is last champion in champions league?"* — answered from the knowledge base with citations, freshness disclosure, routing and cache badges, health-aware failover |
-| 📚 RAG | **One-click seed of 18 real football articles** or **live fetch from BBC Sport / Sky Sports / CNN Sport / TRT Spor**, then hybrid search with **highlighted citation spans**, rerank scores, 👍/👎 feedback |
+| 💬 Chat | Ask *"Tell me who is last champion in champions league?"* (cited answer + freshness disclosure), *"tell me top 5 todays sport news"* (numbered items from live feeds), *"I support galatasaray, any news?"* (topic-aware decline naming your team and sources) — routing, cache and citation badges, health-aware failover |
+| 📚 RAG | **One-click seed of 18 real football articles** or **live fetch from BBC Sport / Sky Sports / CNN Sport / TRT Spor**, then hybrid search with **highlighted citation spans**, rerank scores, recency horizon + "no info found for \<year\>" warnings, 👍/👎 feedback |
 | 🛡️ Groundedness | Claim-by-claim fact checking — real results show green, fabricated claims ("Barcelona won the final 7-0 on the moon") show red |
-| 🔌 MCP | Initialize → list tools → call tools (JSON-RPC 2.0) |
+| 🔌 MCP | Initialize → list tools → call tools (JSON-RPC 2.0), e.g. `news_fetch` |
 | ⚙️ Admin | API keys, per-key quota meters, model health, hot reload |
 
 ```bash
@@ -74,12 +74,25 @@ curl -s localhost:8080/v1/rag/search -H "X-API-Key: redhat-demo-key" \
   -H "Content-Type: application/json" \
   -d '{"query": "who won the champions league final", "include_stats": true}'
 
+# chat — enumeration: today's headlines as numbered, cited items
+curl -s localhost:8080/v1/chat/completions \
+  -H "X-API-Key: redhat-demo-key" -H "Content-Type: application/json" \
+  -d '{"model": "auto", "messages": [{"role": "user", "content": "tell me top 5 todays sport news"}]}'
+
+# source-aware: Turkish headlines filter by feed, not by text
+curl -s localhost:8080/v1/chat/completions \
+  -H "X-API-Key: redhat-demo-key" -H "Content-Type: application/json" \
+  -d '{"model": "auto", "messages": [{"role": "user", "content": "tell me top 3 turkish football news"}]}'
+
+# live news refresh (same as the MCP news_fetch tool)
+curl -s -X POST localhost:8080/v1/news/refresh -H "X-API-Key: redhat-demo-key"
+
 # hallucination detection — the moon-match claim gets flagged
 curl -s localhost:8080/v1/rag/groundedness -H "X-API-Key: redhat-demo-key" \
   -H "Content-Type: application/json" \
   -d '{"query": "who won the champions league finals", "answer": "Manchester City beat Inter Milan 1-0 in 2023. Real Madrid beat Dortmund 2-0 in 2024. Barcelona won the 2024 final 7-0 against Bayern Munich, a match played on the moon."}'
 
-# MCP: list the 12 gateway tools
+# MCP: list the gateway tools
 curl -s localhost:8080/mcp -H "X-API-Key: redhat-demo-key" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
@@ -93,17 +106,19 @@ Or run the scripted end-to-end demo: `examples/demo.sh`.
 | Area | Capability |
 |---|---|
 | **Gateway** | OpenAI-compatible chat + streaming, intelligent routing (`model=auto`), health-aware failover, circuit breaker, retries, load balancing, provider plugins (vLLM, Ollama, any OpenAI-compatible server) |
-| **RAG** | Document ingest with sentence-aware chunking, pluggable embeddings (Ollama, HuggingFace, TEI, OpenAI-compatible), hybrid retrieval (BM25 + vector + RRF), second-stage reranking (lexical + cross-encoder), citations with exact source spans, metadata filtering |
-| **Answer quality** | Built-in extractive QA model with citations and freshness disclosure, relevance gating (honest "not in my knowledge base"), claim-level groundedness/hallucination detection with IDF-weighted support, LLM-as-judge with deterministic fallback, evaluation harness (recall@k, precision@k, MRR, nDCG), user feedback loop |
-| **Agents & tools** | Tool registry with JSON-schema validation and RBAC gating — one registry serves OpenAI-style tool calling **and** the MCP server (`POST /mcp`, JSON-RPC 2.0); Kubernetes/OpenShift, GitHub and ArgoCD tools; planner→researcher→executor→reviewer orchestration with per-role metrics |
+| **Live news** | RSS ingestion from trusted sources (BBC Sport, Sky Sports, CNN Sport, TRT Spor — configurable via `NEWS_SOURCES`), source-tagged and dated documents, immutable-item dedup, on-demand fetch (REST + MCP tool + chat tool calling) and optional scheduled refresh, auto-fetch before declining on news questions |
+| **RAG** | Document ingest with sentence-aware chunking, pluggable embeddings (Ollama, HuggingFace, TEI, OpenAI-compatible), hybrid retrieval (BM25 + vector + RRF), second-stage reranking (lexical + cross-encoder), citations with exact source spans, metadata filtering, **source-aware retrieval** ("turkish news" filters by feed across the language boundary) |
+| **Answer quality** | Built-in extractive QA with citations and freshness disclosure, **question-shape awareness** (single-answer quotes / list questions answer with whole documents / enumerations return N numbered items), relevance gating with honest topic-aware declines, claim-level groundedness/hallucination detection (IDF-weighted), LLM-as-judge with deterministic fallback, evaluation harness (recall@k, precision@k, MRR, nDCG), user feedback loop |
+| **Temporal honesty** | Recency-intent queries ("who won the last final") ordered newest-first, knowledge-horizon disclosure, explicit "No info found for \<year\>" warnings when the knowledge base is behind the present |
+| **Agents & tools** | Tool registry with JSON-schema validation and RBAC gating — one registry serves OpenAI-style tool calling **and** the MCP server (`POST /mcp`, JSON-RPC 2.0); Kubernetes/OpenShift, GitHub, ArgoCD and news tools; planner→researcher→executor→reviewer orchestration with per-role metrics |
 | **Enterprise** | API keys with roles + per-key quotas (hot-reloadable), OIDC/Keycloak JWT auth via JWKS, RBAC, rate limiting, Redis-backed response cache that degrades gracefully on outage, conversation memory (Redis/PostgreSQL) |
 | **Operations** | Prometheus metrics, OpenTelemetry tracing, Grafana dashboards, health/readiness probes, HPA, Helm chart, Tekton pipeline, one-command OpenShift deploy |
 
 ## Design notes
 
 - **One tool registry, two protocols.** OpenAI tool calling and MCP are
-  both views of the same registry — a new tool is instantly usable by chat
-  clients, MCP clients and agents.
+  both views of the same registry — a new tool (like `news_fetch`) is
+  instantly usable by chat clients, MCP clients and agents.
 - **A cache is an optimization, never a dependency.** Redis outages degrade
   to cache misses (counted in `gateway_cache_errors_total`), never failed
   requests. Redis runs persistence-free: cached responses are disposable.
@@ -113,12 +128,21 @@ Or run the scripted end-to-end demo: `examples/demo.sh`.
 - **Distinctive terms decide groundedness.** Claim support is IDF-weighted:
   names and places dominate over common words, so "Barcelona won on the
   moon" scores 0.21 while true facts score 0.83+.
-- **Answers disclose their horizon.** Extractive answers state the
-  knowledge base's latest year — an answer that hides its cutoff is a
-  hallucination with good manners.
-- **Honest no-answers.** Questions outside the knowledge base get "I don't
-  have anything about that" instead of marginally-related quotes, gated on
-  content-term coverage.
+- **Questions have shapes.** A single-answer question wants quoted
+  sentences; a list question ("names of all squad members") wants one whole
+  document; an enumeration ("top 5 news") wants N numbered items. Treating
+  them alike produces confident nonsense.
+- **Answers disclose their horizon — and their gaps.** Extractive answers
+  state the knowledge base's latest year, and for annual events a missing
+  year is surfaced as "No info found for 2026" rather than silence. An
+  answer that hides its cutoff is a hallucination with good manners.
+- **Source questions cross language boundaries via metadata.** TRT's
+  headlines are in Turkish and never contain the English word "turkish" —
+  text-based retrieval cannot answer nationality questions across
+  languages. Source references filter retrieval by feed metadata.
+- **Honest no-answers.** Questions outside the knowledge base get a
+  topic-aware decline that names what couldn't be found — after one live
+  fetch attempt for news questions — instead of marginally-related quotes.
 
 ## Deploy to OpenShift
 
@@ -154,12 +178,15 @@ Key environment variables (see `gateway/config.py` for the full list):
 | `QUOTA_ENABLED` / `DEFAULT_QUOTA_REQUESTS` | `true` / `1000` | Per-key daily quotas |
 | `RAG_RERANKER` | `lexical` | `cross_encoder` needs `CROSS_ENCODER_URL` |
 | `TOOLS_ENABLED` / `MCP_ENABLED` | `true` | Tool calling and MCP server |
+| `NEWS_SOURCES` | BBC · Sky · CNN · TRT | JSON list of `{name, url}` RSS feeds |
+| `NEWS_MAX_ITEMS` / `NEWS_REFRESH_MINUTES` | `10` / `0` | Items per fetch / scheduled refresh (0 = on demand) |
 | `KUBERNETES_API_URL`, `GITHUB_TOKEN`, `ARGOCD_URL/TOKEN` | *(empty)* | Enterprise tool credentials (mount from a Secret) |
 
 ## API surface
 
 - `POST /v1/chat/completions` (+ `/stream`) — with `tools` for agentic tool calling
-- `POST /v1/rag/ingest`, `POST /v1/rag/search` — citations + rerank + stats
+- `POST /v1/rag/ingest`, `POST /v1/rag/search` — citations + rerank + recency horizon
+- `POST /v1/news/refresh` — fetch live news from trusted sources
 - `POST /v1/rag/evaluate`, `POST /v1/rag/feedback`, `GET /v1/rag/feedback/stats`
 - `POST /v1/rag/groundedness` — hallucination detection
 - `POST /v1/agents/run` — multi-agent orchestration
@@ -174,9 +201,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requiremen
 .venv/bin/python -m pytest tests/ -q
 ```
 
-317 tests, fully offline (all HTTP paths mocked). CI runs the suite on
-Python 3.12 + 3.13, builds both container images and smoke-tests the
-composed stack live.
+343 tests, fully offline (all HTTP paths mocked, including RSS fixtures).
+CI runs the suite on Python 3.12 + 3.13, builds both container images and
+smoke-tests the composed stack live.
 
 ## License
 
