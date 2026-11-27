@@ -327,9 +327,10 @@ def rag_search(
     # otherwise outrank the most recent one. The response carries
     # the KB's horizon so a stale "last" is visible as such.
     knowledge_horizon = None
+    recency_warning_text = None
 
     if results and has_recency_intent(payload.query):
-        from gateway.rag.qa import _recency_order
+        from gateway.rag.qa import _recency_order, recency_warning
 
         results = _recency_order(results)
 
@@ -341,6 +342,7 @@ def rag_search(
 
         if years:
             knowledge_horizon = max(years)
+            recency_warning_text = recency_warning(knowledge_horizon)
 
     # Record Prometheus metrics
     if stats:
@@ -436,6 +438,7 @@ def rag_search(
         citations=citations,
         search_id=search_id,
         knowledge_horizon=knowledge_horizon,
+        recency_warning=recency_warning_text,
     )
 
 @rag_router.post("/v1/rag/evaluate")
@@ -725,6 +728,22 @@ def rag_chat_completion(
             citations = []
         else:
             horizon = _knowledge_horizon(results)
+
+            # "No info found for <year>" when the KB is missing
+            # years up to the present — for an annual competition
+            # that gap is information, not silence.
+            from gateway.rag.qa import (
+                has_recency_intent as _has_recency,
+                recency_warning as _recency_warning,
+            )
+
+            warning = None
+
+            if _has_recency(prompt):
+                warning = _recency_warning(horizon)
+
+            if warning:
+                answer = f"⚠ {warning}.\n\n{answer}"
 
             if horizon:
                 answer += f"\n\n(Knowledge base current through {horizon}.)"

@@ -159,6 +159,56 @@ def has_recency_intent(query: str) -> bool:
     return any(term in query_lower for term in RECENCY_INTENT_TERMS)
 
 
+def missing_recency_years(horizon: int | None) -> list[int]:
+    """
+    Years with no coverage between the KB horizon and today.
+
+    For an annual event, the latest expected year is the current
+    year from June onward (finals/titles are decided by then), the
+    previous year before that. An empty list means the knowledge
+    base is current.
+    """
+    if horizon is None:
+        return []
+
+    from datetime import date
+
+    today = date.today()
+
+    expected = today.year if today.month >= 6 else today.year - 1
+
+    if horizon >= expected:
+        return []
+
+    return list(range(horizon + 1, expected + 1))
+
+
+def recency_warning(horizon: int | None) -> str | None:
+    """
+    'No info found for 2026' style warning when the knowledge base
+    is missing years up to the present. None when it is current.
+    """
+    missing = missing_recency_years(horizon)
+
+    if not missing:
+        return None
+
+    if len(missing) == 1:
+        years = str(missing[0])
+    else:
+        years = f"{missing[0]}-{missing[-1]}"
+
+    return (
+        f"No info found for {years}"
+        + (
+            f" — the latest information in the knowledge base is "
+            f"from {horizon}"
+            if horizon
+            else ""
+        )
+    )
+
+
 def build_extractive_answer(
     query: str,
     results: list,

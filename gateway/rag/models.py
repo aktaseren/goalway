@@ -87,8 +87,10 @@ class RAGSearchResponse(BaseModel):
 
     # For recency-intent queries ("last champion..."): the newest
     # year the knowledge base can offer, so a stale "last" is
-    # visible as such.
+    # visible as such — plus an explicit warning for years with no
+    # coverage at all ("No info found for 2026").
     knowledge_horizon: int | None = None
+    recency_warning: str | None = None
 
 
 # ---------------------------------------------------------------
