@@ -639,6 +639,7 @@ def rag_chat_completion(
 
     top_score = 0.0
     top_coverage = 0.0
+    answer_coverage = 0.0
 
     if results:
         top_score = (
@@ -663,10 +664,43 @@ def rag_chat_completion(
     else:
         answer, citations = build_extractive_answer(prompt, results)
 
-        horizon = _knowledge_horizon(results)
+        # Second gate, on the answer itself: the chunk may mention
+        # the question's terms somewhere without any sentence
+        # actually answering it ("names of all squad members" vs a
+        # transfer article that merely names the club). Term overlap
+        # is not answerability — decline instead of misquoting.
+        min_answer_coverage = float(
+            os.getenv("RAG_MIN_ANSWER_COVERAGE", "0.5")
+        )
 
-        if horizon:
-            answer += f"\n\n(Knowledge base current through {horizon}.)"
+        answer_body = answer.split("\n\nSources:")[0]
+        answer_coverage = content_coverage(prompt, answer_body)
+
+        if answer_coverage < min_answer_coverage:
+            horizon = _knowledge_horizon(results)
+
+            answer = (
+                "I don't have anything about that in my knowledge base"
+                + (f" (news through {horizon})" if horizon else "")
+                + ". I can answer questions about the ingested football "
+                "news — or ingest more documents in the RAG tab."
+            )
+
+            logger.info(
+                "request_id=%s rag answer declined: chunk coverage %.2f "
+                "but answer coverage %.2f",
+                request_id,
+                top_coverage,
+                answer_coverage,
+            )
+
+            results = []
+            citations = []
+        else:
+            horizon = _knowledge_horizon(results)
+
+            if horizon:
+                answer += f"\n\n(Knowledge base current through {horizon}.)"
 
     add_messages(conversation_id, req.messages)
     add_assistant_message(conversation_id, answer)
@@ -707,6 +741,9 @@ def rag_chat_completion(
             "citations": citations[:3],
             "top_score": round(top_score, 4),
             "top_coverage": round(top_coverage, 4),
+            "answer_coverage": round(
+                answer_coverage if results else 0.0, 4
+            ),
             "cache": "miss",
         },
     }

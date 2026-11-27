@@ -30,19 +30,31 @@ _GATE_STOP_WORDS = {
 }
 
 
+def _stem(token: str) -> str:
+    """
+    Naive singularization: strip one trailing 's'. Good enough to
+    match champion/champions, name/names, goal/goals — irregular
+    verbs (won/winning) are out of scope.
+    """
+    if token.endswith("s") and len(token) > 3:
+        return token[:-1]
+
+    return token
+
+
 def content_coverage(query: str, text: str) -> float:
     """
-    Fraction of the query's content terms (stop words stripped)
-    present in the text. Separates topical matches (0.5-1.0) from
-    stop-word-only coincidences (~0.0) far better than raw lexical
-    scores, which common words inflate.
+    Fraction of the query's content terms (stop words stripped,
+    lightly stemmed) present in the text. Separates topical matches
+    (0.5-1.0) from stop-word-only coincidences (~0.0) far better than
+    raw lexical scores, which common words inflate.
 
     Used as the relevance gate for extractive answers: below the
     threshold the model says "not in my knowledge base" instead of
     quoting marginally-related text.
     """
     query_terms = [
-        token
+        _stem(token)
         for token in _tokenize(query)
         if len(token) > 2 and token not in _GATE_STOP_WORDS
     ]
@@ -50,7 +62,7 @@ def content_coverage(query: str, text: str) -> float:
     if not query_terms:
         return 0.0
 
-    text_terms = set(_tokenize(text))
+    text_terms = {_stem(token) for token in _tokenize(text)}
 
     matched = sum(1 for term in query_terms if term in text_terms)
 

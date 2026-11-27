@@ -7,7 +7,10 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import pytest
+
 import gateway.api as api_module
+import gateway.ratelimit as ratelimit_module
 from gateway.main import app
 from gateway.rag.models import Document, DocumentChunk, SearchResult
 from gateway.rag.qa import build_extractive_answer
@@ -15,6 +18,15 @@ from gateway.rag.qa import build_extractive_answer
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def clean_rate_limit():
+    """Chat tests share one API key — don't let the sliding-window
+    limiter turn later tests into 429s."""
+    ratelimit_module.REQUEST_HISTORY.clear()
+    yield
+    ratelimit_module.REQUEST_HISTORY.clear()
 
 UCL_TEXT = (
     "Real Madrid won the 2024 Champions League final, beating "
@@ -193,6 +205,62 @@ def test_rag_chat_says_no_when_nothing_matches(monkeypatch):
     # "current" / "date" never appear in the UCL text -> coverage 0
     assert data["gateway"]["top_coverage"] == 0.0
     assert data["gateway"]["citations"] == []
+
+
+def test_rag_chat_declines_term_match_without_answer(monkeypatch):
+    """
+    The squad-list case: the chunk mentions the club (chunk-level
+    term overlap passes) but no sentence answers the question.
+    The answer-level gate must decline instead of misquoting.
+    """
+    _fake_rag(monkeypatch)
+
+    response = client.post(
+        "/v1/chat/completions",
+        headers={"X-API-Key": "redhat-demo-key"},
+        json={
+            "model": "rag",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Tell me names of all members of "
+                        "Real Madrid fc squad"
+                    ),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    content = data["choices"][0]["message"]["content"]
+    assert "don't have anything about that" in content
+    # the chunk DOES mention real madrid -> chunk gate passes...
+    assert data["gateway"]["top_coverage"] > 0
+    # ...but the quoted sentence never covers names/members/squad
+    assert data["gateway"]["answer_coverage"] < 0.5
+    assert data["gateway"]["citations"] == []
+
+
+def test_content_coverage_stemming():
+    from gateway.rag.qa import content_coverage
+
+    assert content_coverage(
+        "who won the champions league final",
+        "Real Madrid won the 2024 Champions League final.",
+    ) == 1.0
+
+    # names/name, champions/champion match via stemming
+    assert content_coverage(
+        "names of champions", "the name of every champion"
+    ) == 1.0
+
+    assert content_coverage(
+        "names of squad members", "Kylian Mbappe joined Real Madrid."
+    ) == 0.0
 
 
 def test_rag_chat_discloses_knowledge_horizon(monkeypatch):
