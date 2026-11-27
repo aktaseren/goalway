@@ -67,10 +67,14 @@ def test_resolve_model_auto_routes_to_echo(monkeypatch):
     assert model == "echo"
 
 
-def test_resolve_model_unhealthy_without_fallback_raises():
-    # No health entries -> model considered unhealthy, no failover.
-    with pytest.raises(LLMError):
-        resolve_model("granite")
+def test_resolve_model_unhealthy_falls_over_to_local_rag():
+    # No health entries -> granite considered unhealthy; the local
+    # rag model has no backend to probe and is always healthy, so it
+    # is the failover target (previously this raised LLMError).
+    model, config = resolve_model("granite")
+
+    assert model == "rag"
+    assert config["provider"] == "rag"
 
 
 def test_first_message_extracts_message():

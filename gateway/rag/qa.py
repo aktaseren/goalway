@@ -12,6 +12,8 @@ this extractive path guarantees the demo works with zero model
 infrastructure.
 """
 
+import re
+
 from gateway.rag.citations import build_citations, _tokenize
 
 # Content words that carry no topical signal for coverage gating.
@@ -42,7 +44,36 @@ def _stem(token: str) -> str:
     return token
 
 
-def content_coverage(query: str, text: str) -> float:
+def _gate_terms(
+    query: str,
+    extra_stop: frozenset | set = frozenset(),
+) -> list[str]:
+    """Content terms used for relevance gating, stemmed."""
+    return [
+        _stem(token)
+        for token in _tokenize(query)
+        if len(token) > 2
+        and token not in _GATE_STOP_WORDS
+        and token not in extra_stop
+    ]
+
+
+def _coverage_of_terms(terms: list[str], text: str) -> float | None:
+    """Coverage of prepared terms against text; None when there are
+    no terms to gate on (query is pure shape, e.g. 'top 5 news')."""
+    if not terms:
+        return None
+
+    text_terms = {_stem(token) for token in _tokenize(text)}
+
+    return sum(1 for term in terms if term in text_terms) / len(terms)
+
+
+def content_coverage(
+    query: str,
+    text: str,
+    extra_stop: frozenset | set = frozenset(),
+) -> float:
     """
     Fraction of the query's content terms (stop words stripped,
     lightly stemmed) present in the text. Separates topical matches
@@ -53,20 +84,27 @@ def content_coverage(query: str, text: str) -> float:
     threshold the model says "not in my knowledge base" instead of
     quoting marginally-related text.
     """
-    query_terms = [
-        _stem(token)
-        for token in _tokenize(query)
-        if len(token) > 2 and token not in _GATE_STOP_WORDS
-    ]
+    terms = _gate_terms(query, extra_stop)
 
-    if not query_terms:
+    if not terms:
         return 0.0
 
-    text_terms = {_stem(token) for token in _tokenize(text)}
+    coverage = _coverage_of_terms(terms, text)
 
-    matched = sum(1 for term in query_terms if term in text_terms)
+    return coverage if coverage is not None else 0.0
 
-    return matched / len(query_terms)
+
+def gate_coverage(
+    query: str,
+    text: str,
+    extra_stop: frozenset | set = frozenset(),
+) -> float | None:
+    """
+    Coverage for gating, or None when the query carries no topical
+    terms at all (pure enumeration shape) — in which case the gate
+    should be skipped rather than declined.
+    """
+    return _coverage_of_terms(_gate_terms(query, extra_stop), text)
 
 
 def _recency_order(results: list) -> list:
@@ -159,6 +197,58 @@ def has_recency_intent(query: str) -> bool:
     return any(term in query_lower for term in RECENCY_INTENT_TERMS)
 
 
+# Enumeration questions: "top 5 news", "latest 3 headlines".
+COUNT_PATTERNS = [
+    re.compile(r"\btop\s+(\d{1,2})\b"),
+    re.compile(r"\blatest\s+(\d{1,2})\b"),
+    re.compile(r"\bfirst\s+(\d{1,2})\b"),
+    re.compile(
+        r"\b(\d{1,2})\s+(?:news|headlines?|stories|articles?|"
+        r"items?|results?)\b"
+    ),
+]
+
+# Words that shape an enumeration request but carry no topical
+# signal — headlines don't contain the words "news" or "sport".
+ENUMERATION_TERMS = {
+    "top",
+    "news",
+    "headline",
+    "headlines",
+    "story",
+    "stories",
+    "article",
+    "articles",
+    "item",
+    "items",
+    "today",
+    "todays",
+    "sport",
+    "sports",
+    "show",
+    "give",
+}
+
+
+def extract_requested_count(query: str) -> int | None:
+    """
+    How many items does the query ask for? ("top 5 news" -> 5)
+
+    Only structured count phrases match — a bare number like the
+    year in "who won the 2023 final" is not a count.
+    """
+    for pattern in COUNT_PATTERNS:
+        match = pattern.search(query.lower())
+
+        if match:
+            count = int(match.group(1))
+
+            if 1 <= count <= 20:
+                return count
+
+    return None
+
+
 def missing_recency_years(horizon: int | None) -> list[int]:
     """
     Years with no coverage between the KB horizon and today.
@@ -214,16 +304,20 @@ def build_extractive_answer(
     results: list,
     max_sentences: int = 3,
     fetch_document=None,
+    requested_count: int | None = None,
 ) -> tuple[str, list[dict]]:
     """
     Build an answer from retrieved results.
 
-    Returns (answer_text, citations). The answer quotes the single
-    most query-relevant sentence of each of the top results, marked
-    with its citation id, followed by a Sources block. List-type
-    questions (names, members, squad...) are answered with the full
-    text of the single best-matching document — all of its chunks,
-    fetched via fetch_document when available.
+    Returns (answer_text, citations). Three question shapes:
+
+    - single-answer: quotes the most query-relevant sentence of each
+      of the top results, marked with citation ids
+    - list questions (names, members, squad...): the full text of
+      the single best-matching document — all of its chunks, fetched
+      via fetch_document when available
+    - enumeration questions ("top 5 news"): N numbered items, newest
+      first, one per document
     """
     if not results:
         return (
@@ -232,13 +326,17 @@ def build_extractive_answer(
             [],
         )
 
-    list_mode = is_list_question(query)
+    list_mode = is_list_question(query) and not requested_count
+    count_mode = requested_count is not None
 
     # Order first, then build citations from the ordered results so
     # citation ids stay aligned with the quoted documents.
     ordered = _recency_order(results)
 
-    if list_mode:
+    if count_mode:
+        # Enumerations are newest-first news semantics.
+        ordered = ordered[: requested_count]
+    elif list_mode:
         # One full document answers a list; more would bury it.
         # Select by content coverage of the question rather than
         # lexical rank — ranking keys on term frequency, so a short
@@ -256,8 +354,11 @@ def build_extractive_answer(
     citations = build_citations(ordered, query)
 
     parts = []
+    separator = "\n" if count_mode else " "
 
-    for citation, result in zip(citations, ordered):
+    for index, (citation, result) in enumerate(
+        zip(citations, ordered), start=1
+    ):
         spans = citation.get("spans") or []
 
         if list_mode:
@@ -276,6 +377,19 @@ def build_extractive_answer(
 
             if sentence is None:
                 sentence = result.chunk.text
+        elif count_mode:
+            # One item per document: the whole (short) item for
+            # news, or its best span for longer documents.
+            if len(result.chunk.text) <= 400:
+                sentence = result.chunk.text
+            elif spans:
+                sentence = max(spans, key=lambda span: span["score"])[
+                    "text"
+                ]
+            else:
+                sentence = (
+                    result.chunk.text.split(". ")[0].rstrip(".") + "."
+                )
         elif spans:
             best_span = max(spans, key=lambda span: span["score"])
             sentence = best_span["text"]
@@ -284,9 +398,11 @@ def build_extractive_answer(
             # sentence of the chunk.
             sentence = result.chunk.text.split(". ")[0].rstrip(".") + "."
 
-        parts.append(f"{sentence} {citation['citation_id']}")
+        prefix = f"{index}. " if count_mode else ""
 
-    answer = " ".join(parts)
+        parts.append(f"{prefix}{sentence} {citation['citation_id']}")
+
+    answer = separator.join(parts)
 
     answer += "\n\nSources: " + ", ".join(
         f"{c['citation_id']} {c['document_id']}"

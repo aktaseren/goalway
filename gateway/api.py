@@ -651,12 +651,18 @@ def rag_chat_completion(
     knowledge base" reply when nothing relevant is found.
     """
     from gateway.rag.qa import build_extractive_answer
+    from gateway.rag.qa import extract_requested_count, gate_coverage
+    from gateway.rag.qa import ENUMERATION_TERMS as _ENUM_TERMS
     from gateway.rag.rerankers import create_reranker
 
     request_id = str(uuid.uuid4())
     conversation_id = req.conversation_id or create_conversation_id()
 
     start = time.time()
+
+    # Enumeration questions ("top 5 news") ask for N items.
+    requested_count = extract_requested_count(prompt)
+    answer_top_k = requested_count or 3
 
     retrieve_k = 4 * int(
         os.getenv("RAG_RERANK_CANDIDATES_MULTIPLIER", "4")
@@ -668,15 +674,16 @@ def rag_chat_completion(
         results = create_reranker().rerank(
             query=prompt,
             results=results,
-            top_k=3,
+            top_k=answer_top_k,
         )
 
     # Relevance gate: when the top result doesn't actually cover the
     # question's content terms, say so instead of quoting
     # marginally-related text. Rerank scores alone can't separate
-    # these — stop-word overlap inflates them.
-    from gateway.rag.qa import content_coverage
-
+    # these — stop-word overlap inflates them. Enumeration questions
+    # strip their shape words ("top", "news", "sport"...): a pure
+    # "top 5 news" has nothing topical to gate on (None -> accept),
+    # while "top 5 messi news" still gates on "messi".
     min_coverage = float(os.getenv("RAG_MIN_ANSWER_COVERAGE", "0.25"))
 
     top_score = 0.0
@@ -689,9 +696,18 @@ def rag_chat_completion(
             if results[0].rerank_score is not None
             else results[0].score
         )
-        top_coverage = content_coverage(prompt, results[0].chunk.text)
+        top_coverage = gate_coverage(
+            prompt,
+            results[0].chunk.text,
+            extra_stop=_ENUM_TERMS if requested_count else frozenset(),
+        )
 
-    if not results or top_coverage < min_coverage:
+    # None means "no topical terms to gate on" — accept.
+    chunk_gate_failed = top_coverage is not None and (
+        top_coverage < min_coverage
+    )
+
+    if not results or chunk_gate_failed:
         horizon = _knowledge_horizon(results)
 
         answer = (
@@ -708,6 +724,7 @@ def rag_chat_completion(
             prompt,
             results,
             fetch_document=rag_service.get_document,
+            requested_count=requested_count,
         )
 
         # Second gate, on the answer itself: the chunk may mention
@@ -715,14 +732,23 @@ def rag_chat_completion(
         # actually answering it ("names of all squad members" vs a
         # transfer article that merely names the club). Term overlap
         # is not answerability — decline instead of misquoting.
+        # Enumeration questions gate on shape-stripped terms; a
+        # pure "top 5 news" (None) passes by design.
         min_answer_coverage = float(
             os.getenv("RAG_MIN_ANSWER_COVERAGE", "0.5")
         )
 
         answer_body = answer.split("\n\nSources:")[0]
-        answer_coverage = content_coverage(prompt, answer_body)
+        answer_coverage = gate_coverage(
+            prompt,
+            answer_body,
+            extra_stop=_ENUM_TERMS if requested_count else frozenset(),
+        )
 
-        if answer_coverage < min_answer_coverage:
+        if (
+            answer_coverage is not None
+            and answer_coverage < min_answer_coverage
+        ):
             horizon = _knowledge_horizon(results)
 
             answer = (
@@ -800,11 +826,11 @@ def rag_chat_completion(
             "documents": [
                 result.chunk.document_id for result in results[:3]
             ],
-            "citations": citations[:3],
+            "citations": citations,
             "top_score": round(top_score, 4),
-            "top_coverage": round(top_coverage, 4),
+            "top_coverage": round(top_coverage or 0.0, 4),
             "answer_coverage": round(
-                answer_coverage if results else 0.0, 4
+                (answer_coverage or 0.0) if results else 0.0, 4
             ),
             "cache": "miss",
         },

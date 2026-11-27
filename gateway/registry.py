@@ -40,6 +40,13 @@ def refresh_health():
     return MODEL_HEALTH
 
 def is_model_healthy(model_name: str):
+    # Local providers (e.g. the built-in "rag" model) have no
+    # backend service — always healthy, regardless of probe state.
+    config = MODEL_REGISTRY.get(model_name) or {}
+
+    if not config.get("health_url"):
+        return True
+
     return MODEL_HEALTH.get(model_name, False)
 
 
