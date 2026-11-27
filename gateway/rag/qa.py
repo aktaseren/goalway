@@ -32,6 +32,28 @@ _GATE_STOP_WORDS = {
 }
 
 
+
+# Words that shape an enumeration request but carry no topical
+# signal — headlines don't contain the words "news" or "sport".
+ENUMERATION_TERMS = {
+    "top",
+    "news",
+    "headline",
+    "headlines",
+    "story",
+    "stories",
+    "article",
+    "articles",
+    "item",
+    "items",
+    "today",
+    "todays",
+    "sport",
+    "sports",
+    "show",
+    "give",
+}
+
 def _stem(token: str) -> str:
     """
     Naive singularization: strip one trailing 's'. Good enough to
@@ -105,6 +127,65 @@ def gate_coverage(
     should be skipped rather than declined.
     """
     return _coverage_of_terms(_gate_terms(query, extra_stop), text)
+
+
+# Generic words that never name a topic ("is there any news for
+# them?" -> the topic is whatever 'them' refers to, carried by the
+# entity words around it).
+TOPIC_STOP_WORDS = _GATE_STOP_WORDS | ENUMERATION_TERMS | {
+    "support",
+    "them",
+    "their",
+    "they",
+    "team",
+    "teams",
+    "club",
+    "clubs",
+    "date",
+    "time",
+    "tell",
+    "ask",
+    "know",
+    "want",
+    "any",
+    "something",
+    "anything",
+    # recency shape words, not entities
+    "current",
+    "currently",
+    "latest",
+    "last",
+    "recent",
+    "newest",
+    "today",
+    "todays",
+}
+
+
+def extract_topic(query: str) -> str | None:
+    """
+    The entity a question is about, for decline messages:
+    'I support galatasaray. is there any news for them?' ->
+    'galatasaray'. None when the query names nothing specific.
+    """
+    topic: list[str] = []
+    seen: set[str] = set()
+
+    for token in _tokenize(query):
+        if (
+            len(token) > 2
+            and token not in TOPIC_STOP_WORDS
+            and token not in seen
+        ):
+            seen.add(token)
+            topic.append(token)
+
+    # A short topic reads as an entity; a long one is a sentence —
+    # fall back to the generic decline.
+    if not topic or len(topic) > 2:
+        return None
+
+    return " ".join(topic)
 
 
 def _recency_order(results: list) -> list:
@@ -210,26 +291,6 @@ COUNT_PATTERNS = [
 
 # Words that shape an enumeration request but carry no topical
 # signal — headlines don't contain the words "news" or "sport".
-ENUMERATION_TERMS = {
-    "top",
-    "news",
-    "headline",
-    "headlines",
-    "story",
-    "stories",
-    "article",
-    "articles",
-    "item",
-    "items",
-    "today",
-    "todays",
-    "sport",
-    "sports",
-    "show",
-    "give",
-}
-
-
 def extract_requested_count(query: str) -> int | None:
     """
     How many items does the query ask for? ("top 5 news" -> 5)

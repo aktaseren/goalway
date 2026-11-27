@@ -707,15 +707,52 @@ def rag_chat_completion(
         top_coverage < min_coverage
     )
 
+    # News questions that find nothing get one live fetch before
+    # declining — "is there any news about X?" deserves checking the
+    # feeds, not just the last batch. Rate-limited to one auto-fetch
+    # per few minutes so repeated questions don't hammer the feeds.
+    if (not results or chunk_gate_failed) and _is_news_query(prompt):
+        if _auto_news_refresh_allowed():
+            try:
+                from gateway.news.ingest import refresh_news
+
+                refresh_news()
+
+                results, _ = rag_service.search(
+                    query=prompt, top_k=retrieve_k
+                )
+
+                if RAG_RERANK_ENABLED and results:
+                    results = create_reranker().rerank(
+                        query=prompt,
+                        results=results,
+                        top_k=answer_top_k,
+                    )
+
+                if results:
+                    top_score = (
+                        results[0].rerank_score
+                        if results[0].rerank_score is not None
+                        else results[0].score
+                    )
+                    top_coverage = gate_coverage(
+                        prompt,
+                        results[0].chunk.text,
+                        extra_stop=(
+                            _ENUM_TERMS if requested_count else frozenset()
+                        ),
+                    )
+
+                chunk_gate_failed = top_coverage is not None and (
+                    top_coverage < min_coverage
+                )
+            except Exception as exc:
+                logger.info("auto news refresh failed: %s", exc)
+
     if not results or chunk_gate_failed:
         horizon = _knowledge_horizon(results)
 
-        answer = (
-            "I don't have anything about that in my knowledge base"
-            + (f" (news through {horizon})" if horizon else "")
-            + ". I can answer questions about the ingested football "
-            "news — or ingest more documents in the RAG tab."
-        )
+        answer = _decline_message(prompt, horizon)
 
         results = []
         citations = []
@@ -751,12 +788,7 @@ def rag_chat_completion(
         ):
             horizon = _knowledge_horizon(results)
 
-            answer = (
-                "I don't have anything about that in my knowledge base"
-                + (f" (news through {horizon})" if horizon else "")
-                + ". I can answer questions about the ingested football "
-                "news — or ingest more documents in the RAG tab."
-            )
+            answer = _decline_message(prompt, horizon)
 
             logger.info(
                 "request_id=%s rag answer declined: chunk coverage %.2f "
@@ -846,6 +878,50 @@ def _knowledge_horizon(results: list) -> int | None:
     ]
 
     return max(years) if years else None
+
+
+_AUTO_REFRESH_GUARD = {"last": 0.0}
+_AUTO_REFRESH_COOLDOWN_SECONDS = 180.0
+
+
+def _is_news_query(prompt: str) -> bool:
+    prompt_lower = prompt.lower()
+
+    return "news" in prompt_lower or "headline" in prompt_lower
+
+
+def _auto_news_refresh_allowed() -> bool:
+    now = time.time()
+
+    if now - _AUTO_REFRESH_GUARD["last"] < _AUTO_REFRESH_COOLDOWN_SECONDS:
+        return False
+
+    _AUTO_REFRESH_GUARD["last"] = now
+
+    return True
+
+
+def _decline_message(prompt: str, horizon: int | None) -> str:
+    """Topic-aware decline: name what couldn't be found."""
+    from gateway.rag.qa import extract_topic
+
+    topic = extract_topic(prompt)
+
+    if topic:
+        return (
+            f"I don't have any news about {topic} in my knowledge base"
+            + (f" (news through {horizon})" if horizon else "")
+            + ". My sources are BBC Sport, Sky Sports and CNN Sport — "
+            "they may not cover it. Try fetching live news, or ask "
+            "'top 5 news' to see what they do cover."
+        )
+
+    return (
+        "I don't have anything about that in my knowledge base"
+        + (f" (news through {horizon})" if horizon else "")
+        + ". I can answer questions about the ingested football "
+        "news — or ingest more documents in the RAG tab."
+    )
 
 
 @router.post("/v1/chat/completions")

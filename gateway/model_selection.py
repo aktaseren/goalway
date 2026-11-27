@@ -49,6 +49,11 @@ FOOTBALL_TERMS = [
     "hat-trick",
     "hat trick",
     "aggregate",
+    # news intent: questions about news belong to the knowledge base
+    # model, not a chat backend
+    "news",
+    "headline",
+    "headlines",
 ]
 
 

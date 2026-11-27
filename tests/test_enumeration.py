@@ -96,6 +96,11 @@ class FakeNewsRAG:
         return []
 
 
+def _fake_rag(monkeypatch):
+    """A knowledge base with no galatasaray coverage."""
+    monkeypatch.setattr(api_module, "rag_service", FakeNewsRAG())
+
+
 def test_top_5_news_returns_five_numbered_items(monkeypatch):
     monkeypatch.setattr(api_module, "rag_service", FakeNewsRAG())
 
@@ -159,3 +164,120 @@ def test_top_3_news_returns_three_items(monkeypatch):
     ]
 
     assert len(lines) == 3
+
+
+def test_news_decline_names_the_topic(monkeypatch):
+    """'is there any news for galatasaray?' -> the decline names
+    galatasaray instead of a generic 'anything about that'."""
+    _fake_rag(monkeypatch)
+
+    response = client.post(
+        "/v1/chat/completions",
+        headers={"X-API-Key": "redhat-demo-key"},
+        json={
+            "model": "rag",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "I support galatasaray. "
+                        "is there any news for them?"
+                    ),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    content = response.json()["choices"][0]["message"]["content"]
+
+    assert "news about galatasaray" in content
+    assert "BBC Sport, Sky Sports and CNN Sport" in content
+
+
+def test_news_query_triggers_one_auto_refresh(monkeypatch):
+    """A news question that finds nothing fetches live feeds once
+    before declining (and the cooldown prevents an immediate
+    second fetch)."""
+    _fake_rag(monkeypatch)
+
+    import gateway.api as api_mod
+    import gateway.news.ingest as news_ingest_module
+
+    calls = []
+
+    def fake_refresh(**kwargs):
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(news_ingest_module, "refresh_news", fake_refresh)
+
+    # reset the cooldown guard
+    api_mod._AUTO_REFRESH_GUARD["last"] = 0.0
+
+    response = client.post(
+        "/v1/chat/completions",
+        headers={"X-API-Key": "redhat-demo-key"},
+        json={
+            "model": "rag",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "is there any news about galatasaray?",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert "news about galatasaray" in (
+        response.json()["choices"][0]["message"]["content"]
+    )
+
+    # exactly one auto-fetch (second call was within the cooldown)
+    client.post(
+        "/v1/chat/completions",
+        headers={"X-API-Key": "redhat-demo-key"},
+        json={
+            "model": "rag",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "any galatasaray news today?",
+                }
+            ],
+        },
+    )
+
+    assert len(calls) == 1
+
+    # restore for other tests
+    api_mod._AUTO_REFRESH_GUARD["last"] = 0.0
+
+
+def test_news_routing_goes_directly_to_rag(monkeypatch):
+    """Queries mentioning news route to rag without failover."""
+    _fake_rag(monkeypatch)
+
+    response = client.post(
+        "/v1/chat/completions",
+        headers={"X-API-Key": "redhat-demo-key"},
+        json={
+            "model": "auto",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "is there any news about barcelona?",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["gateway"]["model"] == "rag"
+    assert data["gateway"]["failover_from"] is None
