@@ -205,6 +205,15 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requiremen
 CI runs the suite on Python 3.12 + 3.13, builds both container images and
 smoke-tests the composed stack live.
 
+## Contributing
+
+Contributions are welcome — and the codebase is built to be
+approachable: one static UI file, a fully offline test suite (~25s),
+and a `docker compose up` that runs everything. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup, the code layout, design
+principles to preserve, and PR expectations. Good first issues are
+labeled [`good first issue`](https://github.com/aktaseren/goalway/labels/good%20first%20issue).
+
 ## License
 
 Apache-2.0
