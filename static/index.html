@@ -216,10 +216,11 @@
     <h3>Knowledge base — football news</h3>
     <div class="row">
       <button id="seed-btn">⚽ Load sample football news (18 articles)</button>
-      <button id="seed-clear" class="secondary" disabled>Reset knowledge base</button>
+      <button id="news-btn" class="secondary">📡 Fetch live news (BBC · Sky · CNN)</button>
     </div>
     <div class="hint" id="seed-status">One click ingests 18 real football news articles through
-      <code>/v1/rag/ingest</code> — chunking, embeddings and the vector store all run behind it.</div>
+      <code>/v1/rag/ingest</code> — chunking, embeddings and the vector store all run behind it.
+      Live news comes from the trusted RSS sources via the <code>news_fetch</code> tool.</div>
   </div>
   <div class="card">
     <h3>Search — hybrid retrieval → rerank → citations</h3>
@@ -473,8 +474,7 @@ const FOOTBALL_NEWS = [
   {id:"copa-america-2024", text:"Argentina won the 2024 Copa America, beating Colombia 1-0 in the final in Miami after extra time. Lautaro Martinez scored the winning goal in the 112th minute. It was Argentina's 16th Copa America title and their third consecutive major tournament win after the 2021 Copa America and the 2022 World Cup."},
 ];
 
-$("seed-btn").onclick = async () => {
-  const btn = $("seed-btn"), status = $("seed-status");
+$("seed-btn").onclick = async () => {  const btn = $("seed-btn"), status = $("seed-status");
   btn.disabled = true;
   btn.textContent = "Ingesting…";
   let chunks = 0;
@@ -496,9 +496,25 @@ $("seed-btn").onclick = async () => {
   btn.textContent = "⚽ Load sample football news (18 articles)";
 };
 
-$("seed-clear").onclick = () => {
-  // vectors persist across restarts; the button just explains this
-  toast("Knowledge base persists (SQLite volume) — redeploy for a clean slate");
+$("news-btn").onclick = async () => {
+  const btn = $("news-btn"), status = $("seed-status");
+  btn.disabled = true;
+  btn.textContent = "Fetching…";
+  try {
+    const d = await api("POST", "/v1/news/refresh", {});
+    const lines = Object.entries(d.sources).map(([name, r]) =>
+      r.error
+        ? `${name}: ✖ ${r.error}`
+        : `${name}: ${r.ingested} new / ${r.fetched} fetched`
+    );
+    status.innerHTML = `📡 <b>Live news refresh</b><br>${lines.map(l => "· " + l).join("<br>")}<br>` +
+      `New items are searchable below — with real sources and dates.`;
+    toast("Live news fetched");
+  } catch (err) {
+    status.textContent = "News fetch failed: " + err.message;
+  }
+  btn.disabled = false;
+  btn.textContent = "📡 Fetch live news (BBC · Sky · CNN)";
 };
 
 document.querySelectorAll("#rag-samples button").forEach(btn => {

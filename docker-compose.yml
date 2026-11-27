@@ -17,6 +17,8 @@ services:
       RAG_VECTOR_DB_PATH: /app/data/vectors.db
       FEEDBACK_DB_PATH: /app/data/feedback.db
       RATE_LIMIT: "60"
+      # keep the knowledge base fresh from trusted news sources
+      NEWS_REFRESH_MINUTES: "60"
     volumes:
       - gateway-data:/app/data
     depends_on:

@@ -67,7 +67,13 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 ARGOCD_URL = os.getenv("ARGOCD_URL", "")
 ARGOCD_TOKEN = os.getenv("ARGOCD_TOKEN", "")
 
-# MCP server 
+# MCP server
 MCP_ENABLED = os.getenv("MCP_ENABLED", "true").lower() == "true"
 MCP_SERVER_NAME = os.getenv("MCP_SERVER_NAME", "goalway")
 MCP_SERVER_VERSION = os.getenv("MCP_SERVER_VERSION", "1.0.0")
+
+# Trusted news sources (RSS -> knowledge base)
+NEWS_MAX_ITEMS = int(os.getenv("NEWS_MAX_ITEMS", "10"))
+NEWS_TIMEOUT_SECONDS = float(os.getenv("NEWS_TIMEOUT_SECONDS", "15"))
+# Scheduled background refresh in minutes; 0 = fetch only on demand
+NEWS_REFRESH_MINUTES = float(os.getenv("NEWS_REFRESH_MINUTES", "0"))

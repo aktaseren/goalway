@@ -37,6 +37,33 @@ def startup_tasks():
 
     start_background_health_refresh()
 
+    # Optional: keep the knowledge base fresh from trusted news
+    # sources (NEWS_REFRESH_MINUTES, 0 = on demand only).
+    from gateway.config import NEWS_REFRESH_MINUTES
+
+    if NEWS_REFRESH_MINUTES > 0:
+        import threading
+        import time
+
+        from gateway.news.ingest import refresh_news
+
+        def _news_loop():
+            time.sleep(15)  # let the stack settle first
+
+            while True:
+                try:
+                    refresh_news()
+                except Exception:
+                    pass
+
+                time.sleep(NEWS_REFRESH_MINUTES * 60)
+
+        threading.Thread(
+            target=_news_loop,
+            name="news-refresher",
+            daemon=True,
+        ).start()
+
 
 # built-in demo console (static/index.html)
 @app.get("/ui", include_in_schema=False)

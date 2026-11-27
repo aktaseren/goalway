@@ -43,6 +43,8 @@ config:
   TOOLS_ENABLED: "true"
   MCP_ENABLED: "true"
   AGENT_MAX_ITERATIONS: "8"
+  NEWS_MAX_ITEMS: "10"
+  NEWS_REFRESH_MINUTES: "0"
 
 # JSON config files mounted at /app/config (override what is baked
 # into the image; hot-reloadable via POST /admin/reload).

@@ -441,6 +441,22 @@ def rag_search(
         recency_warning=recency_warning_text,
     )
 
+@rag_router.post("/v1/news/refresh")
+def news_refresh(
+    auth: AuthContext = Depends(get_auth_context),
+):
+    """
+    Fetch the latest news from the trusted sources (BBC Sport, Sky
+    Sports, CNN Sport) and ingest new items into the knowledge
+    base. Same operation as the MCP `news_fetch` tool.
+    """
+    require_permission(auth, "rag.ingest")
+
+    from gateway.news.ingest import refresh_news
+
+    return {"sources": refresh_news()}
+
+
 @rag_router.post("/v1/rag/evaluate")
 def rag_evaluate(
     payload: RAGEvaluateRequest,

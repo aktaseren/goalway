@@ -21,6 +21,8 @@ the architecture is visible.
 
 **⚡ Try it now:** `docker compose up --build` → open **http://localhost:8080/ui**
 
+**📡 Live news:** click **Fetch live news** in the UI (or `POST /v1/news/refresh`, or MCP `tools/call news_fetch`) to pull today's headlines from trusted sources — BBC Sport, Sky Sports and CNN Sport RSS feeds — into the knowledge base. Items are source-tagged and dated, repeated fetches never duplicate, and the recency horizon reflects real publication dates. Sources are configurable via `NEWS_SOURCES`; `NEWS_REFRESH_MINUTES` schedules automatic refresh.
+
 ```mermaid
 flowchart LR
     C[Clients<br/>API key / OIDC] --> GW[FastAPI Gateway<br/>auth · RBAC · quotas<br/>rate limits · Redis cache]
@@ -45,7 +47,7 @@ page, no build tooling, talking to the gateway's own APIs:
 | Tab | What it shows |
 |---|---|
 | 💬 Chat | Ask *"Tell me who is last champion in champions league?"* — answered from the knowledge base with citations, freshness disclosure, routing and cache badges, health-aware failover |
-| 📚 RAG | **One-click seed of 18 real football articles**, then hybrid search with **highlighted citation spans**, rerank scores, 👍/👎 feedback |
+| 📚 RAG | **One-click seed of 18 real football articles** or **live fetch from BBC Sport / Sky Sports / CNN Sport**, then hybrid search with **highlighted citation spans**, rerank scores, 👍/👎 feedback |
 | 🛡️ Groundedness | Claim-by-claim fact checking — real results show green, fabricated claims ("Barcelona won the final 7-0 on the moon") show red |
 | 🔌 MCP | Initialize → list tools → call tools (JSON-RPC 2.0) |
 | ⚙️ Admin | API keys, per-key quota meters, model health, hot reload |

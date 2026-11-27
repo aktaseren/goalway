@@ -48,6 +48,11 @@ data:
   TOOLS_ENABLED: "true"
   MCP_ENABLED: "true"
   AGENT_MAX_ITERATIONS: "8"
+
+  # --- trusted news sources ---
+  NEWS_MAX_ITEMS: "10"
+  # scheduled refresh (minutes); 0 = fetch only on demand
+  NEWS_REFRESH_MINUTES: "0"
 ---
 apiVersion: v1
 kind: ConfigMap
