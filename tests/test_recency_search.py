@@ -99,6 +99,31 @@ def test_search_applies_recency_ordering_for_last_queries(client_setup):
 
     assert response.status_code == 200
 
-    docs = [r["document_id"] for r in response.json()["results"]]
+    data = response.json()
+    docs = [r["document_id"] for r in data["results"]]
 
     assert docs == ["ucl-2025", "ucl-2023"]
+
+    # the horizon is disclosed so a stale "last" is visible as such
+    assert data["knowledge_horizon"] == 2025
+
+
+def test_search_without_recency_intent_has_no_horizon(client_setup):
+    client, monkeypatch = client_setup
+
+    import gateway.api as api_module
+
+    class FakeRAG:
+        def search(self, query, top_k=5, strategy=None, metadata_filter=None):
+            return ([result("ucl-2023", 2023, 9.0)], None)
+
+    monkeypatch.setattr(api_module, "rag_service", FakeRAG())
+
+    response = client.post(
+        "/v1/rag/search",
+        headers={"X-API-Key": "redhat-demo-key"},
+        json={"query": "who won the 2023 champions league final"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["knowledge_horizon"] is None

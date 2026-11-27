@@ -85,6 +85,11 @@ class RAGSearchResponse(BaseModel):
     citations: list[dict[str, Any]] | None = None
     search_id: str | None = None
 
+    # For recency-intent queries ("last champion..."): the newest
+    # year the knowledge base can offer, so a stale "last" is
+    # visible as such.
+    knowledge_horizon: int | None = None
+
 
 # ---------------------------------------------------------------
 # evaluation, feedback, groundedness

@@ -324,11 +324,23 @@ def rag_search(
     # Recency-intent queries ("who won the LAST final") are ordered
     # newest-first among close-scoring results: lexical rankers have
     # no notion of time, and the densest older article would
-    # otherwise outrank the most recent one.
+    # otherwise outrank the most recent one. The response carries
+    # the KB's horizon so a stale "last" is visible as such.
+    knowledge_horizon = None
+
     if results and has_recency_intent(payload.query):
         from gateway.rag.qa import _recency_order
 
         results = _recency_order(results)
+
+        years = [
+            result.chunk.metadata.get("year")
+            for result in results
+            if result.chunk.metadata.get("year")
+        ]
+
+        if years:
+            knowledge_horizon = max(years)
 
     # Record Prometheus metrics
     if stats:
@@ -423,6 +435,7 @@ def rag_search(
         stats=stats_response,
         citations=citations,
         search_id=search_id,
+        knowledge_horizon=knowledge_horizon,
     )
 
 @rag_router.post("/v1/rag/evaluate")

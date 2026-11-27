@@ -535,6 +535,11 @@ $("rag-search").onclick = async () => {
         ${badge("strategy: " + d.stats.strategy, "blue")}
         ${badge(`${d.stats.total_latency_ms?.toFixed(2) || "?"} ms`, "gray")}
         ${badge(`lexical ${d.stats.lexical_candidates} · vector ${d.stats.vector_candidates}`, "gray")}
+        ${d.knowledge_horizon ? badge(`newest in KB: ${d.knowledge_horizon}`, "yellow") : ""}
+      </div>`;
+    } else if (d.knowledge_horizon) {
+      stats.innerHTML = `<div class="row" style="margin-bottom:14px">
+        ${badge(`newest in KB: ${d.knowledge_horizon}`, "yellow")}
       </div>`;
     }
 
