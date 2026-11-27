@@ -45,7 +45,7 @@ page, no build tooling, talking to the gateway's own APIs:
 | Tab | What it shows |
 |---|---|
 | 💬 Chat | Ask *"Tell me who is last champion in champions league?"* — answered from the knowledge base with citations, freshness disclosure, routing and cache badges, health-aware failover |
-| 📚 RAG | **One-click seed of 17 real football articles**, then hybrid search with **highlighted citation spans**, rerank scores, 👍/👎 feedback |
+| 📚 RAG | **One-click seed of 18 real football articles**, then hybrid search with **highlighted citation spans**, rerank scores, 👍/👎 feedback |
 | 🛡️ Groundedness | Claim-by-claim fact checking — real results show green, fabricated claims ("Barcelona won the final 7-0 on the moon") show red |
 | 🔌 MCP | Initialize → list tools → call tools (JSON-RPC 2.0) |
 | ⚙️ Admin | API keys, per-key quota meters, model health, hot reload |
@@ -59,7 +59,7 @@ open http://localhost:8080/ui   # demo console → click "Load sample football n
 <summary><b>Try the demo without a UI</b> (curl)</summary>
 
 ```bash
-# seed the football knowledge base (17 articles)
+# seed the football knowledge base (18 articles)
 python3 examples/seed_football.py http://localhost:8080
 
 # chat — answered from the knowledge base, with citations

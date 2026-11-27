@@ -1,6 +1,11 @@
 {
   "documents": [
     {
+      "document_id": "real-madrid-squad-2025-26",
+      "text": "The names of the Real Madrid squad players for the 2025-26 season, following the departures of Luka Modric, Lucas Vazquez and the retired Toni Kroos. Goalkeepers: Thibaut Courtois, Andriy Lunin and Fran Gonzalez. Defenders: Trent Alexander-Arnold, Dani Carvajal, Eder Militao, Antonio Rudiger, David Alaba, Dean Huijsen, Raul Asencio, Ferland Mendy and Alphonso Davies. Midfielders: Federico Valverde, Aurelien Tchouameni, Eduardo Camavinga, Jude Bellingham, Arda Guler and Franco Mastantuono. Forwards: Kylian Mbappe, Vinicius Junior, Rodrygo, Endrick and Gonzalo Garcia. Head coach Xabi Alonso took over in the summer of 2025.",
+      "metadata": {"competition": "la-liga", "team": "real-madrid", "year": 2025, "category": "squad-list", "source": "demo"}
+    },
+    {
       "document_id": "ucl-final-2025",
       "text": "Paris Saint-Germain won the 2025 Champions League final, thrashing Inter Milan 5-0 in Munich — the biggest winning margin in a European Cup final. Goals from Achraf Hakimi, Desire Doue (twice), Kvicha Kvaratskhelia and Senny Mayulu sealed PSG's first Champions League title, making them the first French club to win Europe's top prize since Marseille in 1993.",
       "metadata": {"competition": "champions-league", "team": "psg", "year": 2025, "category": "match-report", "source": "demo"}

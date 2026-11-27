@@ -110,6 +110,33 @@ class SQLiteVectorStore(VectorStore):
             for row in rows
         ]
 
+    def get_document_chunks(
+        self,
+        document_id: str,
+    ) -> list[DocumentChunk]:
+        """All chunks of one document, in position order."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT chunk_id, document_id, position, text, metadata
+                FROM vectors
+                WHERE document_id = ?
+                ORDER BY position
+                """,
+                (document_id,),
+            ).fetchall()
+
+        return [
+            DocumentChunk(
+                chunk_id=row["chunk_id"],
+                document_id=row["document_id"],
+                position=row["position"],
+                text=row["text"],
+                metadata=json.loads(row["metadata"]),
+            )
+            for row in rows
+        ]
+
     def delete_document(self, document_id: str) -> int:
         """Remove all chunks of a document. Returns rows deleted."""
         with self._connect() as connection:

@@ -68,6 +68,21 @@ class RAGService:
 
         return len(chunks)
 
+    def get_document(self, document_id: str) -> list:
+        """
+        All chunks of one document in position order. Returns []
+        when the store does not support document fetches.
+        """
+        fetcher = getattr(self.vector_store, "get_document_chunks", None)
+
+        if fetcher is None:
+            return []
+
+        try:
+            return fetcher(document_id)
+        except Exception:
+            return []
+
     def search(
         self,
         query: str,

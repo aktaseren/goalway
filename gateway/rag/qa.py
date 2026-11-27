@@ -108,17 +108,45 @@ def _recency_order(results: list) -> list:
     return close + rest
 
 
+# Questions that expect a list, not a single sentence.
+LIST_INTENT_TERMS = [
+    "names",
+    "name",
+    "members",
+    "member",
+    "list",
+    "squad",
+    "roster",
+    "lineup",
+    "players",
+    "all of",
+    "who is in",
+    "who are",
+]
+
+
+def is_list_question(query: str) -> bool:
+    """Does the question ask for a list of things (names, members...)?"""
+    query_lower = query.lower()
+
+    return any(term in query_lower for term in LIST_INTENT_TERMS)
+
+
 def build_extractive_answer(
     query: str,
     results: list,
     max_sentences: int = 3,
+    fetch_document=None,
 ) -> tuple[str, list[dict]]:
     """
     Build an answer from retrieved results.
 
     Returns (answer_text, citations). The answer quotes the single
     most query-relevant sentence of each of the top results, marked
-    with its citation id, followed by a Sources block.
+    with its citation id, followed by a Sources block. List-type
+    questions (names, members, squad...) are answered with the full
+    text of the single best-matching document — all of its chunks,
+    fetched via fetch_document when available.
     """
     if not results:
         return (
@@ -127,9 +155,26 @@ def build_extractive_answer(
             [],
         )
 
+    list_mode = is_list_question(query)
+
     # Order first, then build citations from the ordered results so
     # citation ids stay aligned with the quoted documents.
-    ordered = _recency_order(results)[:max_sentences]
+    ordered = _recency_order(results)
+
+    if list_mode:
+        # One full document answers a list; more would bury it.
+        # Select by content coverage of the question rather than
+        # lexical rank — ranking keys on term frequency, so a short
+        # doc repeating the club name can outrank the actual list.
+        ordered = sorted(
+            ordered,
+            key=lambda result: content_coverage(
+                query, result.chunk.text
+            ),
+            reverse=True,
+        )[:1]
+    else:
+        ordered = ordered[:max_sentences]
 
     citations = build_citations(ordered, query)
 
@@ -138,7 +183,23 @@ def build_extractive_answer(
     for citation, result in zip(citations, ordered):
         spans = citation.get("spans") or []
 
-        if spans:
+        if list_mode:
+            # Quote the WHOLE document (all chunks, in order) — a
+            # list spans the entire text, and the chunker may have
+            # split it across several chunks.
+            sentence = None
+
+            if fetch_document is not None:
+                chunks = fetch_document(result.chunk.document_id)
+
+                if chunks:
+                    sentence = " ".join(
+                        chunk.text.strip() for chunk in chunks
+                    )
+
+            if sentence is None:
+                sentence = result.chunk.text
+        elif spans:
             best_span = max(spans, key=lambda span: span["score"])
             sentence = best_span["text"]
         else:

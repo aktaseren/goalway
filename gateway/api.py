@@ -662,7 +662,11 @@ def rag_chat_completion(
         results = []
         citations = []
     else:
-        answer, citations = build_extractive_answer(prompt, results)
+        answer, citations = build_extractive_answer(
+            prompt,
+            results,
+            fetch_document=rag_service.get_document,
+        )
 
         # Second gate, on the answer itself: the chunk may mention
         # the question's terms somewhere without any sentence

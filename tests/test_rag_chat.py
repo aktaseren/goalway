@@ -53,6 +53,51 @@ class FakeRAGService:
             None,
         )
 
+    def get_document(self, document_id):
+        return []
+
+
+class FakeSquadRAGService:
+    """Squad doc split across two chunks, as the chunker does."""
+
+    def search(self, query, top_k=5, **kwargs):
+        return (
+            [
+                SearchResult(
+                    chunk=DocumentChunk(
+                        chunk_id="squad-0",
+                        document_id="real-madrid-squad-2025-26",
+                        text=SQUAD_TEXT[:180],
+                        position=0,
+                        metadata={"year": 2025},
+                    ),
+                    score=0.9,
+                )
+            ],
+            None,
+        )
+
+    def get_document(self, document_id):
+        if document_id != "real-madrid-squad-2025-26":
+            return []
+
+        return [
+            DocumentChunk(
+                chunk_id="squad-0",
+                document_id=document_id,
+                text=SQUAD_TEXT[:180],
+                position=0,
+                metadata={"year": 2025},
+            ),
+            DocumentChunk(
+                chunk_id="squad-1",
+                document_id=document_id,
+                text=SQUAD_TEXT[180:],
+                position=1,
+                metadata={"year": 2025},
+            ),
+        ]
+
 
 def _fake_rag(monkeypatch):
     monkeypatch.setattr(api_module, "rag_service", FakeRAGService())
@@ -261,6 +306,52 @@ def test_content_coverage_stemming():
     assert content_coverage(
         "names of squad members", "Kylian Mbappe joined Real Madrid."
     ) == 0.0
+
+
+SQUAD_TEXT = (
+    "The names of the Real Madrid squad players for the 2025-26 "
+    "season. Goalkeepers: Thibaut Courtois, Andriy Lunin. "
+    "Defenders: Dani Carvajal, Eder Militao, Ferland Mendy. "
+    "Midfielders: Jude Bellingham, Federico Valverde. "
+    "Forwards: Kylian Mbappe, Vinicius Junior, Rodrygo."
+)
+
+
+def test_squad_list_question_answered_with_full_document(monkeypatch):
+    """'names of all squad members' with a squad doc in the KB:
+    answered with the full squad list, not a header sentence."""
+    monkeypatch.setattr(
+        api_module, "rag_service", FakeSquadRAGService()
+    )
+
+    response = client.post(
+        "/v1/chat/completions",
+        headers={"X-API-Key": "redhat-demo-key"},
+        json={
+            "model": "rag",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Tell me names of all members of "
+                        "Real Madrid fc squad"
+                    ),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    content = data["choices"][0]["message"]["content"]
+
+    # the actual player names, not a decline and not a header
+    assert "Thibaut Courtois" in content
+    assert "Jude Bellingham" in content
+    assert "Vinicius Junior" in content
+    assert "[1] real-madrid-squad-2025-26" in content
+    assert data["gateway"]["model"] == "rag"
 
 
 def test_rag_chat_discloses_knowledge_horizon(monkeypatch):

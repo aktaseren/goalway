@@ -215,10 +215,10 @@
   <div class="card">
     <h3>Knowledge base — football news</h3>
     <div class="row">
-      <button id="seed-btn">⚽ Load sample football news (17 articles)</button>
+      <button id="seed-btn">⚽ Load sample football news (18 articles)</button>
       <button id="seed-clear" class="secondary" disabled>Reset knowledge base</button>
     </div>
-    <div class="hint" id="seed-status">One click ingests 17 real football news articles through
+    <div class="hint" id="seed-status">One click ingests 18 real football news articles through
       <code>/v1/rag/ingest</code> — chunking, embeddings and the vector store all run behind it.</div>
   </div>
   <div class="card">
@@ -453,6 +453,7 @@ function badge(text, cls) { return `<span class="badge ${cls}">${text}</span>`; 
 /* ---------------- rag ---------------- */
 
 const FOOTBALL_NEWS = [
+  {id:"real-madrid-squad-2025-26", text:"The names of the Real Madrid squad players for the 2025-26 season, following the departures of Luka Modric, Lucas Vazquez and the retired Toni Kroos. Goalkeepers: Thibaut Courtois, Andriy Lunin and Fran Gonzalez. Defenders: Trent Alexander-Arnold, Dani Carvajal, Eder Militao, Antonio Rudiger, David Alaba, Dean Huijsen, Raul Asencio, Ferland Mendy and Alphonso Davies. Midfielders: Federico Valverde, Aurelien Tchouameni, Eduardo Camavinga, Jude Bellingham, Arda Guler and Franco Mastantuono. Forwards: Kylian Mbappe, Vinicius Junior, Rodrygo, Endrick and Gonzalo Garcia. Head coach Xabi Alonso took over in the summer of 2025."},
   {id:"ucl-final-2025", text:"Paris Saint-Germain won the 2025 Champions League final, thrashing Inter Milan 5-0 in Munich — the biggest winning margin in a European Cup final. Goals from Achraf Hakimi, Desire Doue (twice), Kvicha Kvaratskhelia and Senny Mayulu sealed PSG's first Champions League title, making them the first French club to win Europe's top prize since Marseille in 1993."},
   {id:"ballon-or-2025", text:"Ousmane Dembele won the 2025 Ballon d'Or, capping a treble-winning season with Paris Saint-Germain in which he scored more than 30 goals. The French forward beat Lamine Yamal and Vitinha to the award. Dembele had also been named Player of the Tournament at the Club World Cup."},
   {id:"ucl-final-2023", text:"Manchester City completed the treble by winning the 2023 Champions League final, beating Inter Milan 1-0 in Istanbul. Rodri scored the only goal in the 68th minute. It was City's first Champions League title, making them the second English club after Manchester United in 1999 to win the Premier League, FA Cup and Champions League in the same season."},
@@ -492,7 +493,7 @@ $("seed-btn").onclick = async () => {
     status.textContent = "Seeding failed: " + err.message;
   }
   btn.disabled = false;
-  btn.textContent = "⚽ Load sample football news (17 articles)";
+  btn.textContent = "⚽ Load sample football news (18 articles)";
 };
 
 $("seed-clear").onclick = () => {
