@@ -89,6 +89,7 @@ from gateway.rag.rerankers import create_reranker
 from gateway.rag.evaluation import evaluate_retrieval, llm_judge
 from gateway.rag.feedback import get_feedback_store
 from gateway.rag.hallucination import groundedness_report
+from gateway.rag.qa import has_recency_intent
 
 # quotas, tools, agents, MCP
 from gateway.config import (
@@ -319,6 +320,15 @@ def rag_search(
         RAG_RERANK_LATENCY.labels(reranker=reranker_name).observe(
             rerank_ms / 1000
         )
+
+    # Recency-intent queries ("who won the LAST final") are ordered
+    # newest-first among close-scoring results: lexical rankers have
+    # no notion of time, and the densest older article would
+    # otherwise outrank the most recent one.
+    if results and has_recency_intent(payload.query):
+        from gateway.rag.qa import _recency_order
+
+        results = _recency_order(results)
 
     # Record Prometheus metrics
     if stats:

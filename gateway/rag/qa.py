@@ -132,6 +132,33 @@ def is_list_question(query: str) -> bool:
     return any(term in query_lower for term in LIST_INTENT_TERMS)
 
 
+# Queries whose intent is the most RECENT result, not just the most
+# relevant one.
+RECENCY_INTENT_TERMS = [
+    "last",
+    "latest",
+    "recent",
+    "most recent",
+    "newest",
+    "current",
+    "currently",
+    "this year",
+    "today",
+]
+
+
+def has_recency_intent(query: str) -> bool:
+    """Does the query ask for the latest thing ('last champion...')?
+
+    Lexical rankers have no notion of time — 'last' is just another
+    unmatched token. Queries with recency intent should be ordered
+    newest-first among close-scoring results.
+    """
+    query_lower = query.lower()
+
+    return any(term in query_lower for term in RECENCY_INTENT_TERMS)
+
+
 def build_extractive_answer(
     query: str,
     results: list,
